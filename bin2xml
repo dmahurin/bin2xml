@@ -28,6 +28,7 @@ sub read_bits
 	my($readsize) = POSIX::ceil($readsizebits / 8);
 	read(INFILE, $buf, $readsize)
 		if($readsizebits > 0);
+	return undef unless(defined($buf));
 	if($bitbufin ne '' or $readsizebits % 8)
 	{
 		$bitbufin .= unpack("B*", $buf);
@@ -126,9 +127,11 @@ $text =~ s:\/\/.*(?=$)::gm;
 $text =~ s:#.*(?=$)::gm;
 
 $primative_sizebits{"INT8"} =  $primative_sizebits{"CHAR"} = 
-$primative_sizebits{"DATA"} =
+$primative_sizebits{"UUDATA"} =
+$primative_sizebits{"HEXDATA"} =
 $primative_sizebits{"SKIPBYTE"} = 8;
 
+$primative_sizebits{"BITVECTOR"} =
 $primative_sizebits{"BITBITS"} =
 $primative_sizebits{"HEXBITS"} =
 $primative_sizebits{"INTBITS"} =
@@ -138,6 +141,27 @@ $primative_sizebits{"INT16"} = 16;
 $primative_sizebits{"INT24"} = 24;
 $primative_sizebits{"INT32"} = 32;
 
+$primative_read{"CSTRING"} =
+sub
+{
+	my($fh, $count) = @_;
+	my($outbuf) = "";
+	while($count--)
+	{
+print "r$count\n";
+		my($c);
+		do
+		{
+			last unless(read($fh, $c, $1));
+			$outbuf .= $c;
+		}
+		while($c ne "\0");
+	}
+	print "out: $outbuf\n";
+	return $outbuf;
+};
+
+$primative_fromraw{"BITVECTOR"} =
 $primative_fromraw{"BITBITS"} =
 $primative_fromraw{"HEXBITS"} =
 $primative_fromraw{"CHAR"} =
@@ -164,11 +188,11 @@ sub
 	return \@bufout;
 };
 
-$primative_fromraw{"DATA"} =
+$primative_fromraw{"HEXDATA"} =
 sub
 {
 	my($bufref) = @_;
-	return undef if($$bufref =~ m:^\0*$:); #don't store zero data
+#	return undef if($$bufref =~ m:^\0*$:); #don't store zero data
 	return $bufref;
 };
 
@@ -176,18 +200,39 @@ $primative_fromraw{"SKIPBYTE"} =
 $primative_fromraw{"SKIPBITS"} = 
 sub
 {
+   my($bufref) = @_;
+#print "d " . length($$bufref) . "\n";;
+   print "non-zero skip\n" if($$bufref =~ /[^\0]/);
    return undef;
 };
 
+$primative_toraw{"BITVECTOR"} = 
 $primative_toraw{"BITBITS"} = 
 $primative_toraw{"HEXBITS"} = 
 $primative_toraw{"CHAR"} =
-$primative_toraw{"DATA"} =
+$primative_toraw{"HEXDATA"} =
 $primative_toraw{"UUDATA"} =
 sub
 {
    my($bufref) = @_;
    return $bufref;
+};
+
+$primative_fromraw{"CSTRING"} =
+sub
+{
+	my($bufref) = @_;
+	my(@s) = split(/\x00/, $$bufref);
+	return \@s;
+};
+
+$primative_toraw{"CSTRING"} =
+sub
+{
+	my($bufref) = @_;
+	my($sbuf) = join("\0", @$bufref) . "\0";
+	print "Ra: $sbuf\n";
+	return \$sbuf;
 };
 
 # store INTBITS as integers in memory.
@@ -232,8 +277,6 @@ sub
    my($bufout) = pack('C*', @$bufref);
    return \$bufout;
 };
-
-
 
 $primative_fromraw{"INT16"} =
 sub
@@ -295,12 +338,11 @@ sub
    return \$bufout;
 };
 
-$primative_tostring{"DATA"} =
+$primative_tostring{"HEXDATA"} =
 sub
 {
    my($bufref) = @_;
    
-   my $l = length($$bufref);
    return unpack("H*", $$bufref);
    
 };
@@ -310,8 +352,48 @@ sub
 {
    my($bufref) = @_;
 
-   return unpack("u*", $$bufref);
-   
+   my $s = pack("u", $$bufref);
+   if(length($s) > 60)
+   {
+      $s = "\n" . $s;
+   }
+   else
+   {
+     $s =~ s:\n$::;
+   }
+   return $s;
+};
+
+$primative_tostring{"BITVECTOR"} =
+sub
+{
+	my($bufref, $count) = @_;
+	my(@setbits);
+	my($i) = $count - 1;
+	for my $b (split(//, unpack("B$count", $$bufref)))
+	{
+		push(@setbits,$i) if($b);
+		$i--;
+	}
+	return join(',', @setbits);
+};
+
+$primative_fromstring{"BITVECTOR"} =
+sub
+{
+	my($instr, $count) = @_;
+	my(%setbits);
+	for my $n (split(/,/, $instr))
+	{
+		$setbits{$n} = 1;
+	}
+	my $bits = "";
+	for (my $i = $count -1; $i >= 0; $i--)
+	{
+		$bits .= ($setbits{$i}) ? 1 : 0;
+	}
+	my $buf = pack("B$count", $bits);
+	return \$buf;
 };
 
 $primative_tostring{"SKIPBYTE"} = 
@@ -365,7 +447,7 @@ sub
 	return \$buf;
 };
 
-$primative_fromstring{"DATA"} = 
+$primative_fromstring{"HEXDATA"} = 
 sub
 {
    my($instr) = @_;
@@ -380,8 +462,9 @@ sub
 {
    my($instr) = @_;
    my($buf);
+   $instr =~ s:^\n::;
 
-   $buf = pack("u*", $instr);
+   $buf = unpack("u", $instr);
    return \$buf;
 };
 
@@ -408,6 +491,7 @@ $primative_tostring{"INT16"} =
 $primative_tostring{"INT24"} = 
 $primative_tostring{"INT32"} =
 $primative_tostring{"INTBITS"} =
+$primative_tostring{"CSTRING"} =
 sub
 {
    my($bufref) = @_;
@@ -419,6 +503,7 @@ $primative_fromstring{"INT16"} =
 $primative_fromstring{"INT24"} =
 $primative_fromstring{"INT32"} =
 $primative_fromstring{"INTBITS"} =
+$primative_fromstring{"CSTRING"} =
 sub
 {
 	my($instr) = @_;
@@ -468,7 +553,7 @@ if($text =~ m%^\s*([\w]+):\s*\n\s*([^:]+)\s*\n:\n%s )
 	}
 	$text = $'; #indentfix->';
 }
-elsif($text =~ m%^\s*([\w\d]+)=$([^=]+)^=$%ms )
+elsif($text =~ m%^\s*([\w\d]*)=$([^=]+)^=$%ms )
 {
 	($translations{$1}, $reverse_translations{$1}) = parse_translation($2);
 	$text = $';
@@ -497,6 +582,14 @@ my $mainref = struct_read_xml("MAIN");
 #struct_write_xml("MAIN", $mainref); 
 struct_write("MAIN", $mainref); 
 close(INFILE);
+if(defined($translations{""}->{"SECTOR_SIZE"}))
+{
+	seek(OUTFILE,0,2);
+	my($remain) = tell(OUTFILE) % $translations{""}->{"SECTOR_SIZE"};
+	$remain = 2048 - $remain if($remain);
+	my($buf) = pack("Z$remain", "");
+	print OUTFILE $buf;
+}
 close(OUTFILE);
 }
 elsif($outfile =~ m:\.xml$:)
@@ -523,6 +616,7 @@ close(OUTFILE);
 sub struct_read
 {
 	my($type, $struct_start) = @_;
+	printf "read struct: %x %x (%d)\n", tell(INFILE), tell(INFILE) - $struct_start, tell(INFILE) - $struct_start if($debug);
 	my(%this_struct);
 	unless(defined($struct_start))
 	{
@@ -558,7 +652,6 @@ print "read: $type: $ftype, $fname, fc = $fcount, $foffset\n" if($debug);
 			my($sizebits) = $primative_sizebits{$ftype};
 			$sizebits = struct_size($ftype) unless(defined($sizebits));
 			$fcount = int (($endpos-$pos) * 8/$sizebits);
-			$fcount
 		}
 		else
 		{
@@ -581,15 +674,23 @@ print "read: $type: $ftype, $fname, fc = $fcount, $foffset\n" if($debug);
 			next unless($foffset);
 			$pos = tell(INFILE);
 
-			print "seek error: $!\n"
-			unless(seek(INFILE, $struct_start+ $foffset,0));
+			my $r = seek(\*INFILE, $struct_start+ $foffset,0);
+			print "seek error: $!\n" unless($r);
+			print "before $ftype $fname\n" if($r > 1);
+			
 		}
-#printf ("off: %x %x + %d\n", tell(INFILE), tell(INFILE) - $struct_start, length($bitbufin));
+printf ("off: ($ftype) %x %x + %d\n", tell(INFILE), tell(INFILE) - $struct_start, length($bitbufin)) if($debug);
 		if(defined($primative_sizebits{$ftype}))
 		{
 			my $buf = read_bits(\*INFILE, $fcount * 
 				$primative_sizebits{$ftype});
+			return \%this_struct unless (defined($buf));
 
+			$fdata = &{$primative_fromraw{$ftype}}(\$buf, $fcountset);
+		}
+		elsif(defined($primative_read{$ftype}))
+		{
+			my $buf = &{$primative_read{$ftype}}(\*INFILE, $fcount);
 			$fdata = &{$primative_fromraw{$ftype}}(\$buf, $fcountset);
 		}
 		elsif(defined($structs{$ftype}))
@@ -602,6 +703,7 @@ print "read: $type: $ftype, $fname, fc = $fcount, $foffset\n" if($debug);
 				struct_read($ftype, $struct_start));
 			}
 			my $countunset = $fcount - $fcountset;
+			print "reads: $ftype $fcountset,$fcount\n" if($debug);
 			read_bits(\*INFILE, $countunset *
                                 struct_size($ftype))
 					if($countunset);
@@ -683,7 +785,10 @@ sub struct_expression
 		}
 		elsif(ref($this_struct->{$1}->[0]) eq 'ARRAY')
 		{
-			$buf2 .= $this_struct->{$1}->[0]->[0];
+		#	$buf2 .= $this_struct->{$1}->[0]->[0];
+			my $size = @{$this_struct->{$1}->[0]};
+			# return last element
+			$buf2 .= $this_struct->{$1}->[0]->[$size -1];
 		}
 		else
 		{
@@ -826,7 +931,7 @@ sub struct_write
 		# handle unread type
 		unless(defined($ftotalcount))
 		{
-			($ftotalcount, $fcount) = &struct_expression(\%this_struct, $fcount, $struct_start);
+			($ftotalcount, $fcount) = &struct_expression($structref, $fcount, $struct_start);
 			#print "warning $ftype $fname  $fdatacount, $ftotalcount $fcount\n";
 			#$ftotalcount = $fcount;
 		}
@@ -841,10 +946,9 @@ sub struct_write
 			seek(OUTFILE, $struct_start + $foffset, 0));
 			print "seek to $struct_start + $foffset\n" if($debug);
 		}
-		print "write $fname $type $ftotalcount\n" if($debug);
 printf ("off: %d(%x) %d(%x) + %d\n", tell(OUTFILE), tell(OUTFILE), tell(OUTFILE) - $struct_start, tell(OUTFILE) - $struct_start, length($bitbufout)) if($debug);
 
-		write_type(\*OUTFILE, $ftype, $fdata, $ftotalcount, $struct_start);
+		write_type(\*OUTFILE, $ftype, $fdata, $ftotalcount, $struct_start, $fname);
 		next unless( 
 			defined($fptype) and
 			defined($fpname) and
@@ -856,32 +960,62 @@ printf ("off: %d(%x) %d(%x) + %d\n", tell(OUTFILE), tell(OUTFILE), tell(OUTFILE)
                 my($fpdata, $fpdatacount, $fptotalcount) = @{$structref->{$fpname}};
 		print "fp $structref $fpdata $fpdatacount $fptotalcount\n" if($debug);
 		next unless(ref $fpdata eq "ARRAY");
+		my(@fpdatasplit) = array_split($fpdatacount, @$fpdata);
 
-		for my $offset (@$fdata)
+		for (my $i = 0; $i < @$fdata; $i++)
 		{
+			my $offset = $fdata->[$i];
+			my $data = $fpdatasplit[$i];
 			#print "here $offset\n";
 			print "warning zero offset in $ftype $fptype\n" unless($offset);
 			my $prevpos = tell(OUTFILE);
 			print "seek error: $!\n" unless(
 			seek(OUTFILE, $struct_start + $offset, 0));
 			#print "seekp to $struct_start + $offset\n";
-			write_type(\*OUTFILE, $fptype, $fpdata, $fptotalcount, $struct_start);
+			print STDERR "$fptype $fptotalcount\n";
+			write_type(\*OUTFILE, $fptype, $data, $fptotalcount, $struct_start, $fpname);
 			seek(OUTFILE, $prevpos, 0);
 		}
 	}
 }
 
+sub array_split
+{
+	my($count, @data) = @_;
+	my(@out);
+	while(@data)
+	{
+		my(@part) = splice(@data, 0, $count);
+		push(@out, \@part);
+	}
+	return @out;
+}
+
 sub write_type
 {
-	my($fh, $type, $data, $count, $struct_start) = @_;
+	my($fh, $type, $data, $count, $struct_start, $name) = @_;
 
 	if(defined($primative_toraw{$type}))
 	{
 
 		my $refout = &{$primative_toraw{$type}}($data, $count);
-		#print "wrt: $strout $type $count\n";
-		
-		write_bits($fh, $refout, $count * $primative_sizebits{$type});
+		print "$type $name $count\n" if($count <0);
+
+		if(defined($primative_sizebits{$type}))
+		{
+			write_bits($fh, $refout, $count * $primative_sizebits{$type});
+		}
+		else
+		{
+			write_bits($fh, $refout, length($$refout) *8);
+		}
+
+		if($debug)
+		{
+			my $p = tell($fh);
+			my $s = &{$primative_tostring{$type}}($data, $count);
+			print "write @ $p $type $count s $s\n";
+		}
 	}
 	elsif(defined($structs{$type}))
 	{
@@ -890,7 +1024,7 @@ sub write_type
 	}
 	else
 	{
-		print "unknown type $type\n";
+		print STDERR "unknown type $type\n";
 	}
 }
 
@@ -900,18 +1034,27 @@ sub write_structs
 	my($fh, $type, $structs_ref, $fcount, $struct_start) = @_;
 	my $fcountunset = $fcount;
 
+
+	print STDERR "negative count $fcount\n" if($fcount < 0);
+
+
 	if(defined($structs_ref))
 	{
-		for my $struct_ref (@$structs_ref)
+		my @refs =
+			( ref($structs_ref) eq "ARRAY" ) ?
+			( @$structs_ref ) :
+			( $structs_ref );
+		for my $struct_ref (@refs)
 		{
 			struct_write($type, $struct_ref, $struct_start);
 			$fcountunset--;
 		}
 	}
-	if($fcountunset)
+	print STDERR "too many $fcount ($fcountunset) $type\n" if($fcountunset < 0);
+	if($fcountunset >0)
 	{
 		#print "unset count $fcountunset in a $type\n";
-		#print "wt2 $count\n";
+		#print "wt2 $type $fcount $fcountunset\n";
 		write_bits($fh, undef, struct_size($type) *
 			$fcountunset);
 	}
@@ -969,7 +1112,15 @@ sub struct_write_xml
 #print "$fname, $ftype, $fcount\n";
 		   if(defined($primative_tostring{$ftype}))
 		   {
-			   my $strout = &{$primative_tostring{$ftype}}($fdata, $fdatacount);
+			my $strout;
+			if(0 && $debug)
+			{
+				my $p = tell(OUTFILE);
+				my $r = &{$primative_toraw{$ftype}}($fdata, $fdatacount);
+				$strout = unpack("H*", $$r);
+			}
+			else
+			{ $strout = &{$primative_tostring{$ftype}}($fdata, $fdatacount); }
 			if(defined($ftrans) and 
 			 defined($translations{$ftrans}) and
 			 defined($translations{$ftrans}->{$strout}))
@@ -992,7 +1143,7 @@ sub struct_write_xml
  
 		   if(defined($primative_tostring{$fptype}))
 		   {
-			   my $strout = &{$primative_tostring{$fptype}}($fpdata, $fpdatasize);
+			   my $strout = &{$primative_tostring{$fptype}}($fpdata, $fpdatacount);
 			   print OUTFILE "$indent<$fpname>$strout</$fpname>\n";
 		   }
 		   else
@@ -1014,7 +1165,7 @@ sub struct_size
 	for my $name_fields (@{$structs{$type}})
 	{
 		my($fname, $fields) =  @$name_fields;
-		my($ftype, $fcount) = @$fields;
+		my($ftype, $fcount,$ftrans, $foffset) = @$fields;
 		next if($ftype eq "OFFSET_START");
 		if($fcount =~ /[^\d]/)
 		{
@@ -1040,3 +1191,23 @@ sub struct_size
 	return $size;
 }
 
+sub myseek
+{
+	my($fh, $pos) = @_;
+	my($cpos) = tell($fh);
+	if($pos < $cpos)
+	{
+		print "back seek\n";
+		return seek($fh, $pos, 0);
+	}
+	else
+	{
+		my $buf;
+		my $r = read($fh, $buf, $pos - $cpos);
+		return undef unless(defined($r));
+		return 1 unless($buf =~ /[^\0]/);
+		print "seeking over non-zero data\n";
+		print "at offset $cpos +". length($`) . "\n";
+		return 2;
+	}
+}
