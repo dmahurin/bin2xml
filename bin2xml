@@ -397,8 +397,9 @@ $primative_fromstring{"CHAR"} =
 sub
 {
 	my($instr, $len) = @_;
-	return \$instr if(length($instr) == $len);
-	my($buf) = pack("Z$len", $instr);
+	return \$instr if((!defined($len)) ||
+		length($instr) == $len);
+	my($buf) = pack("a$len", $instr);
 	return \$buf;
 };
 
@@ -439,13 +440,14 @@ if($text =~ m%^\s*([\w]+):\s*\n\s*([^:]+)\s*\n:\n%s )
 		$field =~ m:^
 			(\[([^\]]*)\]\s*)? # [$2]
 			(([\w{}]+)(\s*\[([^\[\]]+)\])?\@)? # $4[$6]@
-			([\w{}]+)(\s*\[([^\[\]]+)\])? # $7[$9]
+			([\w{}]+)(\s*\[([^\[\]]*)\])? # $7[$9]
 			(\s+\<([\w{}]+)\>)? # <$11>
 			(\s+((\w+)\@)?(\w+))? # 14@15
 			:x;
 		my($offset, $ptype, $pcount, $type, $count, $trans, $pname, $name) = ($2, $4, $6, $7, $9, $11, $14, $15);
 		print '($offset, $ptype, $pcount, $type, $count, $trans, $pname, $name) = ($2, $4, $6, $7, $9, $11, $14, $15) = ' . "$offset, $ptype, $pcount, $type, $count, $trans, $pname, $name\n" if ($debug);
                 $count = 1 unless(defined($count));
+		undef $count if($count eq '');
 		$name = $type . $i unless(defined($name));
 		if(defined($ptype))
 		{
@@ -546,10 +548,24 @@ print "read: $type: $ftype, $fname, fc = $fcount, $foffset\n" if($debug);
 
 		my($pos);
 		
-		#print "$fcount\n";
-		($fcount, $fcountset) = &struct_expression(\%this_struct, $fcount);
-		next unless($fcount);
-		#print "count: $fcount, $fcountset\n";
+		# empty fcount means everything
+		if((!defined($fcount)) || $fcount eq '')
+		{
+			my $pos = tell(INFILE);
+			seek(INFILE, 0, 2);
+			my $endpos = tell(INFILE);
+			seek(INFILE, $pos, 0);
+			my($sizebits) = $primative_sizebits{$ftype};
+			$sizebits = struct_size($ftype) unless(defined($sizebits));
+			$fcount = int (($endpos-$pos) * 8/$sizebits);
+			$fcount
+		}
+		else
+		{
+			($fcount, $fcountset) = &struct_expression(\%this_struct, $fcount);
+			next unless($fcount);
+			#print "count: $fcount, $fcountset\n";
+		}
 		$fcountset = $fcount unless(defined($fcountset) and
 			$fcountset <= $fcount);
 		#print "pcount in: $fpcount\n";
@@ -709,7 +725,7 @@ sub struct_read_xml
 			$ftype = expand_struct_type(\%this_struct, $type, $ftype);
 			$ftrans = expand_struct_type(\%this_struct, $type, $ftrans);
 			($fcount, $fcountset) = &struct_expression(\%this_struct, $fcount, $struct_start);
-			next unless($fcount);
+			#next unless($fcount);
 			$fcountset = $fcount unless(defined($fcountset) and
 				$fcountset <= $fcount);
 			#print "pcount in: $fpcount\n";
@@ -734,11 +750,12 @@ sub struct_read_xml
 				
 				$fdata =
 				&{$primative_fromstring{$ftype}}($data, $fcountset);
-				
+				$fcountset = $fcount = ceil(length($$fdata)*8/$primative_sizebits{$ftype}) unless(defined($fcountset));
 			}
 			else
 			{
 				push(@$fdata, struct_read_xml($ftype, $fname));
+				$fcountset = $fcount = @$fdata unless(defined($fcountset));
 			}
 			@{$this_struct{$fname}} = ($fdata, $fcountset, $fcount);
 			my $rr = \%this_struct;
@@ -860,8 +877,8 @@ sub write_type
 
 	if(defined($primative_toraw{$type}))
 	{
+
 		my $refout = &{$primative_toraw{$type}}($data, $count);
-		my $strout = &{$primative_tostring{$type}}($data, $count);
 		#print "wrt: $strout $type $count\n";
 		
 		write_bits($fh, $refout, $count * $primative_sizebits{$type});
