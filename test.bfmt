@@ -1,8 +1,0 @@
-MAIN:
-	HEXBITS[5] one
-	INTBITS[1] t
-	INTBITS[2] r
-	HEXBITS[8] c
-	INT24 bb
-	CHAR end
-:
