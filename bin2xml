@@ -528,8 +528,9 @@ if($text =~ m%^\s*([\w]+):\s*\n\s*([^:]+)\s*\n:\n%s )
 			([\w{}]+)(\s*\[([^\[\]]*)\])? # $7[$9]
 			(\s+\<([\w{}]+)\>)? # <$11>
 			(\s+((\w+)\@)?(\w+))? # 14@15
-			:x;
-		my($offset, $ptype, $pcount, $type, $count, $trans, $pname, $name) = ($2, $4, $6, $7, $9, $11, $14, $15);
+			(\s=\s*(.*))? # =17
+			$:x;
+		my($offset, $ptype, $pcount, $type, $count, $trans, $pname, $name, $value) = ($2, $4, $6, $7, $9, $11, $14, $15, $17);
 		print '($offset, $ptype, $pcount, $type, $count, $trans, $pname, $name) = ($2, $4, $6, $7, $9, $11, $14, $15) = ' . "$offset, $ptype, $pcount, $type, $count, $trans, $pname, $name\n" if ($debug);
                 $count = 1 unless(defined($count));
 		undef $count if($count eq '');
@@ -537,7 +538,7 @@ if($text =~ m%^\s*([\w]+):\s*\n\s*([^:]+)\s*\n:\n%s )
 		if(defined($ptype))
 		{
 			$pcount = 1 unless(defined($pcount));
-			my $fields = [ $type, $count, $trans, $offset, $ptype, $pname, $pcount ];
+			my $fields = [ $type, $count, $trans, $value, $offset, $ptype, $pname, $pcount ];
 			push(@{$structs{$structname}}, [ $name, $fields ]);
 			$struct_fields{$structname}->{$name} = $fields;
 			# when reading xml, we need the ptypes as fields too
@@ -545,7 +546,7 @@ if($text =~ m%^\s*([\w]+):\s*\n\s*([^:]+)\s*\n:\n%s )
 		}
 		else
 		{
-			my $fields = [ $type, $count, $trans, $offset ];
+			my $fields = [ $type, $count, $trans, $value, $offset ];
 			push(@{$structs{$structname}}, [ $name, $fields ]);
 			$struct_fields{$structname}->{$name} = $fields;
 		}
@@ -626,7 +627,7 @@ sub struct_read
 	for my $name_fields (@{$structs{$type}})
 	{
 		my($fname, $fields) = @$name_fields;
-		my($ftype, $fcount, $ftrans, $foffset, $fptype, $fpname, $fpcount) = @$fields;
+		my($ftype, $fcount, $ftrans, $fvalue, $foffset, $fptype, $fpname, $fpcount) = @$fields;
 		my($fdata);
 		my($fcountset, $fpcountset);
 print "read: $type: $ftype, $fname, fc = $fcount, $foffset\n" if($debug);
@@ -680,6 +681,8 @@ print "read: $type: $ftype, $fname, fc = $fcount, $foffset\n" if($debug);
 			
 		}
 printf ("off: ($ftype) %x %x + %d\n", tell(INFILE), tell(INFILE) - $struct_start, length($bitbufin)) if($debug);
+		$fvalue = struct_expression(\%this_struct, $fvalue)
+			if(defined($fvalue));
 		if(defined($primative_sizebits{$ftype}))
 		{
 			my $buf = read_bits(\*INFILE, $fcount * 
@@ -687,11 +690,15 @@ printf ("off: ($ftype) %x %x + %d\n", tell(INFILE), tell(INFILE) - $struct_start
 			return \%this_struct unless (defined($buf));
 
 			$fdata = &{$primative_fromraw{$ftype}}(\$buf, $fcountset);
+			print "assertion failed: ", fdata_value($fdata), " != $fvalue\n"
+				if(defined($fvalue) && ! fdata_equals($fdata, $fvalue));
 		}
 		elsif(defined($primative_read{$ftype}))
 		{
 			my $buf = &{$primative_read{$ftype}}(\*INFILE, $fcount);
 			$fdata = &{$primative_fromraw{$ftype}}(\$buf, $fcountset);
+			print "assertion failed: ", fdata_value($fdata), " != $fvalue\n"
+				if(defined($fvalue) && ! fdata_equals($fdata, $fvalue));
 		}
 		elsif(defined($structs{$ftype}))
 		{
@@ -708,10 +715,15 @@ printf ("off: ($ftype) %x %x + %d\n", tell(INFILE), tell(INFILE) - $struct_start
                                 struct_size($ftype))
 					if($countunset);
 		}
+		elsif($ftype eq "EVAL")
+		{
+			$fdata = $fvalue;
+		}
 		else
 		{
 			print STDERR "unknown type: $ftype\n";
 		}
+
 
 		#print "set struct $fname ($fcountset)\n";
 		@{$this_struct{$fname}} = ($fdata, $fcountset, $fcount)
@@ -775,7 +787,7 @@ sub struct_expression
 	my($this_struct, $buf, $struct_start) = @_;
 	return $buf unless($buf =~ /\D/);
 	my($buf2) = '';
-	while($buf =~ m:([A-Za-z]\w+):)
+	while($buf =~ m:([A-Za-z]\w*):)
 	{
 		$buf = $'; #';#<-indent fix
 		$buf2 .= $`;
@@ -820,7 +832,7 @@ sub struct_read_xml
 		if(defined($struct_fields{$type}->{$fname}))
 		{
 			my $fieldref = $struct_fields{$type}->{$fname};
-			my($ftype, $fcount, $ftrans) = @$fieldref;
+			my($ftype, $fcount, $ftrans, $fvalue) = @$fieldref;
 			my($fdata);
 			# add sequential structure
 			$fdata = $this_struct{$fname}->[0]
@@ -829,6 +841,14 @@ sub struct_read_xml
 
 			$ftype = expand_struct_type(\%this_struct, $type, $ftype);
 			$ftrans = expand_struct_type(\%this_struct, $type, $ftrans);
+
+			if(defined($fvalue))
+			{	
+				$fvalue = struct_expression(\%this_struct, $fvalue);
+				print "assertion failed: $fdata != $fvalue\n"
+					unless(fdata_equals($fdata, $fvalue));
+			}
+
 			($fcount, $fcountset) = &struct_expression(\%this_struct, $fcount, $struct_start);
 			#next unless($fcount);
 			$fcountset = $fcount unless(defined($fcountset) and
@@ -914,7 +934,7 @@ sub struct_write
 	{
 		my($fname, $fields) =  @$name_fields;
 
-		my($ftype, $fcount, $ftrans, $foffset, $fptype, $fpname, $fpcount) = @$fields;
+		my($ftype, $fcount, $ftrans, $fvalue, $foffset, $fptype, $fpname, $fpcount) = @$fields;
 		$ftype = expand_struct_type($structref, $type, $ftype);
 		$ftrans = expand_struct_type($structref, $type, $ftrans);
 		print 'wrf ($ftype, $fcount, $ftrans, $foffset, $fptype, $fpname, $fpcount = ' . "($ftype, $fcount, $ftrans, $foffset, $fptype, $fpname, $fpcount)\n" if($debug);
@@ -1103,7 +1123,7 @@ sub struct_write_xml
 	for my $name_fields (@{$structs{$type}})
 	{
 		my($fname, $fields) =  @$name_fields;
-		my($ftype, $fcount, $ftrans, $foffset, $fptype, $fpname, $fpsize) = @$fields;
+		my($ftype, $fcount, $ftrans, $fvalue, $foffset, $fptype, $fpname, $fpsize) = @$fields;
 		$ftype = expand_struct_type($structref, $type, $ftype);
 		$ftrans = expand_struct_type($structref, $type, $ftrans);
 		next if($ftype eq "OFFSET_START");
@@ -1129,6 +1149,10 @@ sub struct_write_xml
 			}
 			print OUTFILE "$indent<$fname>$strout</$fname>\n";
 		   }
+                   elsif($ftype eq "EVAL")
+                   {
+			print OUTFILE "$indent<$fname>$fdata</$fname>\n";
+                   }
 		   else
 		   {
 			   for my $substructref (@{$fdata})
@@ -1165,7 +1189,7 @@ sub struct_size
 	for my $name_fields (@{$structs{$type}})
 	{
 		my($fname, $fields) =  @$name_fields;
-		my($ftype, $fcount,$ftrans, $foffset) = @$fields;
+		my($ftype, $fcount,$ftrans, $fvalue, $foffset) = @$fields;
 		next if($ftype eq "OFFSET_START");
 		if($fcount =~ /[^\d]/)
 		{
@@ -1211,3 +1235,18 @@ sub myseek
 		return 2;
 	}
 }
+
+sub fdata_value
+{
+	my($fdata) = @_;
+
+	return (ref($fdata) eq 'ARRAY') ? $fdata->[0] : $fdata;
+}
+
+sub fdata_equals
+{
+	my($fdata, $fvalue) = @_;
+
+	return fdata_value($fdata) eq $fvalue;
+}
+
