@@ -1,0 +1,123 @@
+Binary Format ( bfmt ) specification
+
+2003-12-15, Don Mahurin
+
+
+A "bfmt" file specifies the format of a binary file, by using
+primative data types, simple structures and translations to
+describe the layout of the file.
+
+The best way to explain the specification is to use an
+example.
+
+A struct of types is defined with a name and using  sign
+termination.
+
+"MAIN" serves a special purpose, as it is the starting point into
+specification.
+
+MAIN:
+	INT8 byte1
+	INT16 short1
+	INT24 x1
+	INT32 int1
+	CHAR char1
+	MYDATA data1
+:
+
+The count of the data type is specified with []'s after the
+data type name. If ommited, count is assumed to be one.
+
+
+
+MYDATA:
+	CHAR[12] name 
+	INTBITS[2] ready
+	INTBITS[6] go
+	INT32[4] data
+:
+
+Note that bit order for bytes is assumed to be 
+most significant bit first.
+Integers types are unsigned and most significant byte first.
+("RINT" may be defined in the future for reverse byte integers.)
+
+Special types are defined to skip bits and bytes:
+
+Types may be offset with reference to an "OFFSET_START" marker
+set previously in the structure or in a parent structure. 
+An offset is indicated by using [offset] before the type.
+
+MYDATA:
+	SKIPBYTES[4] reserved
+	OFFSET_START
+	CHAR name[8]
+	SKIPBITS[2]
+	INTBITS[6]
+	[15] INT32[2] lasttwo
+:
+
+A translation provides a conversion from the actual value
+read to a value more easily understood by humans.
+A translation is defined with a name and using an equal sign as
+termination.
+
+MONTH=
+	0 "January"
+	1 "February"
+=
+
+DAY=
+	"M" "Monday"
+	"T" "Tuesday"
+=
+
+The conversion is used with <>'s in a field definition.
+
+MYDATE:
+	INT16 <MONTH> month
+	CHAR[1] <DAY> day
+:
+
+Structures referenced directly by an offset variable can be
+read as inline structures. This "pointer" notation is:
+
+TYPE@OFFSET_TYPE name@offset_name
+
+OFFSET_TYPE can have an array count, specifying how man pointers
+there are.
+And TYPE can have an array count, specifying how man structures
+are found at the location(s) specified by the offset.
+
+OFFSET_TYPES:
+	OFFSET_START
+	MYDATE@INT16 mydate@date_offset
+	MYDATE[2]@INT16 start_end_dates@start_end_dates_offset
+	MYDATE@INT16[20] holiday_dates@holidays_dates_offset
+	MYDATE[10]@INT16[10] employee_days_off@employee_dayes_off_offset
+:
+
+All array counts and offsets can be specified as an expression
+that references other struct variables.
+
+EMP_DATA:
+	INT16 offset_shorts_from_parent_start
+	
+	[offset_from_parent_start/2] INT16 num_employees
+	INT max_days_off
+	MYDATE[max_days_off]@INT16[num_employees] employee_days_off@employee_dayes_off_offset
+:
+
+Struct and Translations can be derived from previous definitions.
+A {var} definition will be replaced with the value of "var".
+
+DONS_CMD_SPEC:
+	INT8 cmd
+	INT8[3] args
+:
+
+COMMAND:
+	CHAR[16] name
+	{NAME}S_COMMAND_SPEC
+:
+

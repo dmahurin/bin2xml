@@ -1,0 +1,6 @@
+fix INTBITS
+replace BITS in fmt file
+HEXBITS
+BITBITS
+INT24
+

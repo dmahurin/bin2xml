@@ -1,0 +1,46 @@
+<ifo_type>VMGI</ifo_type>
+<ifo>
+	<vmg_last_sector>5</vmg_last_sector>
+	<ifo_last_sector>2</ifo_last_sector>
+	<version>
+		<major>1</major>
+		<minor>1</minor>
+	</version>
+	<prohibited_region_mask>0</prohibited_region_mask>
+	<vmg_category0>0</vmg_category0>
+	<vmg_category>0</vmg_category>
+	<vmg_num_volumes>1</vmg_num_volumes>
+	<vmg_this_volume_num>1</vmg_this_volume_num>
+	<disc_side>1</disc_side>
+	<vmg_num_title_sets>0,1</vmg_num_title_sets>
+	<provider_identifier>DVD QUICK BUILDER</provider_identifier>
+	<vmg_pos_code>0,0,0,0,0,0,0,0</vmg_pos_code>
+	<vmgi_last_byte>1275</vmgi_last_byte>
+	<fp_pgc_start_byte>1024</fp_pgc_start_byte>
+	<vmgm_vobs_start_sector>0</vmgm_vobs_start_sector>
+	<vmg_tt_srpt_start_sector>1</vmg_tt_srpt_start_sector>
+	<vmgm_pgci_ut_start_sector>0</vmgm_pgci_ut_start_sector>
+	<vmg_ptl_mait_start_sector>0</vmg_ptl_mait_start_sector>
+	<vmg_vts_atrt_start_sector>2</vmg_vts_atrt_start_sector>
+	<vmg_txtdt_mg_start_sector>0</vmg_txtdt_mg_start_sector>
+	<vmgm_c_adt_start_sector>3</vmgm_c_adt_start_sector>
+	<vmgm_vobu_admap_start_sector>0</vmgm_vobu_admap_start_sector>
+	<vmgm_vobs_media_attributes>
+		<video_attributes>
+			<coding>mpeg2</coding>
+			<standard>NTSC</standard>
+			<aspect>4:3</aspect>
+			<disallow_auto_panscan>1</disallow_auto_panscan>
+			<disallow_auto_letterbox>1</disallow_auto_letterbox>
+			<cc1>0</cc1>
+			<cc2>0</cc2>
+			<unknown>0</unknown>
+			<bit_rate>VBR</bit_rate>
+			<resolution>0</resolution>
+			<letterboxed>0</letterboxed>
+			<film>0</film>
+		</video_attributes>
+		<num_audio_streams>0</num_audio_streams>
+		<num_sub_picture_streams>0</num_sub_picture_streams>
+	</vmgm_vobs_media_attributes>
+</ifo>
