@@ -1,3 +1,7 @@
+=
+	SECTOR_SIZE 2048
+=
+
 MAIN:
 	OFFSET_START
 	CHAR[12] <IFO_TYPE> ifo_type
@@ -62,6 +66,7 @@ AUDIO_ATTRIBUTES:
 SUB_PICTURE_STREAM_ATTRIBUTES:
 	INT8 type
 	SKIPBYTE zero1
+	//CHAR[2] lang_code // code sometimes is all FF's
 	INT8[2] lang_code
 	INT8 lang_ext
 	SKIPBYTE zero2
@@ -89,7 +94,7 @@ PGCI_SRP:
 	PGC@INT32 pgci@pgci_start_byte
 :
 
-// VTSM_LU
+// VTSM_LU, VMGM_LU
 //        Video Manager Menu Language Unit Table
 LU_EA:
 	OFFSET_START
@@ -106,6 +111,7 @@ PGCI_LU:
         INT8 language_ext
 	INT8 existence_mask // (VMGM Ayyy yyyy, A == Title menu(2))
 	LU_EA@INT32 lu_ea@language_start_byte
+	//INT32 language_start_byte
 :
 
 // Video Manager Menu PGCI Unit Table
@@ -137,7 +143,7 @@ COMMAND:
 	INTBITS[1] dir_cmp
 	INTBITS[3] <CMP> cmp
 	INTBITS[4] <CMD_TYPE_{command_type}> cmd
-	INT8[3] args
+	INT16[3] args
 :
 
 CMP=
@@ -206,17 +212,20 @@ BOOL=
 CELL_CATEGORY:
 	INTBITS[2] <CELL_CATEGORY_ANGLE_TYPE> cell_type
 	INTBITS[2] <CELL_CATEGORY_BLOCK_TYPE> block_type
-	INTBITS[1] <BOOL> seamless-in-pci
+	INTBITS[1] <BOOL> seamless_in_pci
 	INTBITS[1] <BOOL> interleaved
 	INTBITS[1] <BOOL> discontinuity
-	INTBITS[1] <BOOL> seamless-in-dsi
+	INTBITS[1] <BOOL> seamless_in_dsi
+	INT8 restricted
 :
 
 CELL_PLAYBACK_IT:
  	CELL_CATEGORY category
         INT8 still_time // seconds, 0xff = Inf.
         INT8 command_num // 0 = no command
-        INT32 playback_time
+        HEXDATA[3] playback_time
+	INTBITS[2] frame_type
+        INTBITS[6] frame
         INT32 entry_point_sector
         INT32 first_ilvu_vobu_end_sector
         INT32 last_vobu_start_sector
@@ -233,14 +242,15 @@ AUDIO_STREAM_STATUS:
 	INTBITS[1] available
 	SKIPBITS[4] reserved
 	INTBITS[3] stream_number
-	SKIPBYTE[1] reserved2
+	SKIPBYTE reserved2
 :
 
 SUBPICTURE_STREAM_STATUS:
 	INTBITS[1] available
 	SKIPBITS[2] reserved
 	INTBITS[5] stream_number
-	SKIPBYTE[3] reserved2
+	//SKIPBYTE[3] reserved2
+ 	HEXDATA[3] unknown // non-zero in matrix ifo 2
 :
 
 PGC:
@@ -248,20 +258,22 @@ PGC:
 	INT16  unknown1 // -- end byte ?
 	INT8 num_programs
 	INT8 num_cells
-	INT32   playback_time
-	INT32  prohibited_user_operations
+	HEXDATA[3]   playback_time
+	INTBITS[2] frame_type
+        INTBITS[6] frame
+	BITVECTOR[32] prohibited_user_operations
 	AUDIO_STREAM_STATUS[8]  audio_stream_status
 	SUBPICTURE_STREAM_STATUS[32] sub_picture_stream_status
 	INT16 next_pgc_number
         INT16 previous_pgc_number
-        INT16 group_pgc_number
+        INT16 go_up_pgc_number
         INT8  still_time //in seconds
         INT8  pg_playback_mode
 	YUVCOLORB32[16] pallete
 	PGC_COMMAND_TABLE@INT16 pgc_command_table@pgc_command_table_start_byte
-//	PGC_PROGRAM_MAP[num_programs]@INT16 pgc_program_map@pgc_program_map_start_byte
- //       CELL_PLAYBACK_IT[num_cells]@INT16 cell_playback_it@cell_playback_information_table_start_byte
-  //      CELL_POSITION_IT[num_cells]@INT16 cell_position_it@cell_position_information_table_start_byte
+	PGC_PROGRAM_MAP[num_programs]@INT16 pgc_program_map@pgc_program_map_start_byte
+	CELL_PLAYBACK_IT[num_cells]@INT16 cell_playback_it@cell_playback_information_table_start_byte
+	CELL_POSITION_IT[num_cells]@INT16 cell_position_it@cell_position_information_table_start_byte
 :
 
 COMMAND_LIMIT:
@@ -303,35 +315,80 @@ PTT:
 
 // PartOfTitle search pointer table info
 PTT_SRPT:
+	OFFSET_START
 	INT16 num_titles // TTUs in the VTS
 	SKIPBYTE[2] zero1 // reserved
-	INT32 ptt_srpt_end_byte
-	PTT[num_titles] ptt
+	INT32 end_byte
+//	PTT@INT32[num_titles] ptt@ptt_offsets
+	//HEXDATA[end_byte+1 - ptt_offsets - 4] junk // ending non-zeros?
+//	PTT[(int(end_byte+1 - ptt_offsets - 4)/4)] extra_ptt // ending non-zeros?
+	INT32[num_titles] ptt_offsets
+	PTT[(int(end_byte+1 - 4)/4)] ptt
 :
 
-MEDIA_ATTRIBUTES:
+MEDIA_ATTRIBUTES1:
 	VIDEO_ATTRIBUTES video_attributes
 
 	INT16 num_audio_streams
 	AUDIO_ATTRIBUTES[8,num_audio_streams] audio_attributes
+	SKIPBYTE[16] reserved
          
 	INT16 num_sub_picture_streams
 	SUB_PICTURE_STREAM_ATTRIBUTES[1,num_sub_picture_streams] sub_picure_stream_attributes
 :
 
+KARAOKE_EXTENSION:
+	INTBITS[7] reserved0
+	INTBITS[1] ach0_guide_melody_exists
+	INTBITS[7] reserved1
+	INTBITS[1] ach1_guide_melody_exists
+	INTBITS[4] reserved2
+	INTBITS[1] ach2_guide_vocal1_exists
+	INTBITS[1] ach2_guide_vocal2_exists
+	INTBITS[1] ach2_guide_melody1_exists
+	INTBITS[1] ach2_guide_melody2_exists
+	INTBITS[4] reserved3
+	INTBITS[1] ach3_guide_vocal1_exists
+	INTBITS[1] ach3_guide_vocal2_exists
+	INTBITS[1] ach3_guide_melody1_exists
+	INTBITS[1] ach3_guide_melody2_exists
+	INTBITS[4] reserved4
+	INTBITS[1] ach4_guide_vocal1_exists
+	INTBITS[1] ach4_guide_vocal2_exists
+	INTBITS[1] ach4_guide_melody1_exists
+	INTBITS[1] ach4_guide_melody2_exists
+	SKIPBYTE[13] unknown
+:
+
+MEDIA_ATTRIBUTES2:
+	VIDEO_ATTRIBUTES video_attributes
+
+	INT16 num_audio_streams
+	AUDIO_ATTRIBUTES[8,num_audio_streams] audio_attributes
+	SKIPBYTE[16] reserved
+         
+	INT16 num_sub_picture_streams
+	SUB_PICTURE_STREAM_ATTRIBUTES[32,num_sub_picture_streams] sub_picure_stream_attributes
+	KARAOKE_EXTENSION multichannel_extenstion
+//	HEXDATA[18] ext
+:
+
 VTS_ATR:
 	INT32 end_byte
 	INT32 vts_cat_app_type
-	MEDIA_ATTRIBUTES vtsm_vobs_media_attributes
-	MEDIA_ATTRIBUTES vtstt_vobs_media_attributes
+	MEDIA_ATTRIBUTES1 vtsm_vobs_media_attributes
+	SKIPBYTE[164]
+	MEDIA_ATTRIBUTES2 vtstt_vobs_media_attributes
 :
 
 # Video Title Set Attribute Table
 VMG_VTS_ATRT:
+	OFFSET_START
 	INT16 num_vts_atr
 	INT16 reserved
 	INT32 table_end_byte
 	VTS_ATR@INT32[num_vts_atr] vts_atr@start_bytes
+	//INT32[num_vts_atr] start_bytes
 :
 
 PGCIT:
@@ -351,11 +408,12 @@ TMAP:
 :
 
 TMAPTI:
+	OFFSET_START
 	INT16 num_tmaps
 	INT16 reserved1
 	INT32 tmaps_end_byte
 
-	TMAP@INT32 tmaps@tmaps_start_bytes
+	TMAP@INT32[num_tmaps] tmaps@tmaps_start_bytes
 :
 
 IFO_VERSION:
@@ -382,6 +440,8 @@ C_ADT:
 	INT16 reserved
 	INT32 end_address
 	C_ADT_CELL[num_cells] cells
+	//HEXDATA[end_address - 7 - 12 * num_cells] junk // non-zero ?
+	C_ADT_CELL[int((end_address - 7 - 12 * num_cells)/12)] extra_cells // non-zero ?
 :
 
 VOBU_ADMAP:
@@ -418,9 +478,12 @@ VTSI:
         INT32 vtsm_vobu_admap_start_sector
         INT32 vts_c_adt_start_sector
         INT32 vts_vobu_admap_start_sector
-        DATA[24] unknown_data1 //  zero_6, but has non-zeros
+        // HEXDATA[24] unknown_data1 //  zero_6, but had non-zeros ?? where
+	SKIPBYTE[24] unknown_data1
 
-	MEDIA_ATTRIBUTES vmgm_vobs_media_attributes
+	MEDIA_ATTRIBUTES1 vtsm_vobs_media_attributes
+	SKIPBYTE[164] reserved
+	MEDIA_ATTRIBUTES2 vts_vobs_media_attributes
 
 	[fp_pgc_start_byte] PGC fp_pgc
 
@@ -439,9 +502,9 @@ VMGI:
 	SKIPBYTE[12] zero_1
 	INT32 ifo_last_sector
         IFO_VERSION version // bcd, 0x10 V1.0]
-	INT8 prohibited_region_mask
-        INT8 vmg_category0
-        INT16 vmg_category
+	SKIPBYTE category0
+	BITVECTOR[8] prohibited_region_mask
+        SKIPBYTE[2] category2_3
         INT16 vmg_num_volumes
         INT16 vmg_this_volume_num
         INT8 disc_side // side ID
@@ -464,18 +527,18 @@ VMGI:
         INT32 vmgm_vobu_admap_start_sector
         SKIPBYTE[32] unknown_data1 //  zero_6, but has non-zeros
 
-        MEDIA_ATTRIBUTES vmgm_vobs_media_attributes
+        MEDIA_ATTRIBUTES1 vmgm_vobs_media_attributes
 
-//	[fp_pgc_start_byte] PGC fp_pgc
+	[fp_pgc_start_byte] PGC fp_pgc
 
-//	[vmg_tt_srpt_start_sector*2048] TT_SRPT vmg_tt_srpt
+	[vmg_tt_srpt_start_sector*2048] TT_SRPT vmg_tt_srpt
 
-//	[vmgm_pgci_ut_start_sector*2048] PGCI_UT vmgm_pgci_ut
- //       [vmg_ptl_mait_start_sector*2048] VMG_PTL_MAIT vmg_ptl_mait
-//don        [vmg_vts_atrt_start_sector*2048] VMG_VTS_ATRT vmg_vts_atrt
-   //     [vmg_txtdt_mg_start_sector*2048] VMG_TXTDT_MG vmg_txtdt_mg
-    //    [vmgm_c_adt_start_sector*2048] VMG_C_ADT vmg_c_adt
-     //   [vmgm_vobu_admap_start_sector*2048] VMGM_VOBU_ADMAP vmg_vob_admap
+	[vmgm_pgci_ut_start_sector*2048] PGCI_UT vmgm_pgci_ut
+  //    [vmg_ptl_mait_start_sector*2048] VMG_PTL_MAIT vmg_ptl_mait
+	[vmg_vts_atrt_start_sector*2048] VMG_VTS_ATRT vmg_vts_atrt
+  //     [vmg_txtdt_mg_start_sector*2048] VMG_TXTDT_MG vmg_txtdt_mg
+	[vmgm_c_adt_start_sector*2048] C_ADT vmg_c_adt
+	[vmgm_vobu_admap_start_sector*2048] VOBU_ADMAP vmg_vob_admap
 :
 
 //    VMGI_MAT vmgi_mat // Video Manager Information Management Table
