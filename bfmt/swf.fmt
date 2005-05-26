@@ -8,20 +8,20 @@ MAIN:
 :
 
 BODY_FWS:
-	INT8 version // ( 0x04 for SWF 4)
-	INT32 file_length
+	UI8 version // ( 0x04 for SWF 4)
+	UI32 file_length
 	RECT frame_size
-	INT16 frame_rate
-	INT16 frame_count
+	UI16 frame_rate
+	UI16 frame_count
 	TAGGED_BLOCK[] tagblock
 :
 
 RECT:
-	INTBITS[5] nbits
-	SIB[nbits] xmin
-	SIB[nbits] xmax
-	SIB[nbits] ymin
-	SIB[nbits] ymax
+	UB[5] nbits
+	SB[nbits] xmin
+	SB[nbits] xmax
+	SB[nbits] ymin
+	SB[nbits] ymax
 	SKIPBITS[]
 :
 
@@ -48,7 +48,7 @@ SHAPE_STYLES:
 :
 
 FILL_STYLES:
-	INT8 count
+	UI8 count
 	FILL_STYLE[count] styles
 :
 
@@ -61,36 +61,36 @@ FILL_STYLE_TYPE=
 =
 
 GRADIENT_RECORD:
-	INT8 value
+	UI8 value
 	RGB color
 :
 
 GRADIENT:
-	INT8 count
+	UI8 count
 	GRADIENT_RECORD[count] gradient_records
 :
 
 MATRIX:
-	INTBITS[1] has_scale
-	INTBITS[has_scale && 5] nscale_bits
-	INTBITS[has_scale && nscale_bits] scale_x
-	INTBITS[has_scale && nscale_bits] scale_y
-	INTBITS[1] has_rotate
-	INTBITS[has_rotate && 5] rotate_bits
-	INTBITS[has_rotate && rotate_bits] rotate_skew_0
-	INTBITS[has_rotate && rotate_bits] rotate_skew_1
-	INTBITS[5] translate_bits
-	INTBITS[translate_bits] translate_x
-	INTBITS[translate_bits] translate_y
+	UB[1] has_scale
+	UB[has_scale && 5] nscale_bits
+	UB[has_scale && nscale_bits] scale_x
+	UB[has_scale && nscale_bits] scale_y
+	UB[1] has_rotate
+	UB[has_rotate && 5] rotate_bits
+	UB[has_rotate && rotate_bits] rotate_skew_0
+	UB[has_rotate && rotate_bits] rotate_skew_1
+	UB[5] translate_bits
+	UB[translate_bits] translate_x
+	UB[translate_bits] translate_y
 	SKIPBITS[]
 :
 
 FILL_STYLE:
-	INT8 <FILL_STYLE_TYPE> type
+	UI8 <FILL_STYLE_TYPE> type
 	RGB[type == 0x00] color
 	MATRIX[type & 0x10 && 1] gradient_matrix
 	GRADIENT[type & 0x10 && 1] gradient
-	INT16[type & 0x40 && 1] bitmap_id
+	UI16[type & 0x40 && 1] bitmap_id
 	MATRIX[type & 0x40 && 1] bitmap_matrix
 :
 
@@ -101,12 +101,12 @@ SHAPE_RECORD_TYPE=
 	
 
 SHAPE_RECORD:
-	INTBITS[1] <SHAPE_RECORD_TYPE> type
+	UB[1] <SHAPE_RECORD_TYPE> type
 	SHAPE_RECORD_DATA_{type} data
 :
 
 SHAPE_RECORD_DATA_SETUP:
-	INTBITS[5] type
+	UB[5] type
 	EVAL ARRAY_LAST = type == 0 and "SHAPE_RECORD"
 	EVAL has_new_styles = type & 0x10 && 1
 	EVAL has_line_style = type & 0x8 && 1
@@ -114,13 +114,13 @@ SHAPE_RECORD_DATA_SETUP:
 	EVAL has_fill_style0 = type & 0x2 && 1
 	EVAL has_move_to = type & 0x1 && 1
 
-	INTBITS[has_move_to && 5] shape_move_size
-	SIB[shape_move_size] move_x
-	SIB[shape_move_size] move_y
+	UB[has_move_to && 5] shape_move_size
+	SB[shape_move_size] move_x
+	SB[shape_move_size] move_y
 
-	INTBITS[has_fill_style0 && fill_bits_count] fill_style0
-	INTBITS[has_fill_style1 && fill_bits_count] fill_style1
-	INTBITS[has_line_style && line_bits_count] line_style
+	UB[has_fill_style0 && fill_bits_count] fill_style0
+	UB[has_fill_style1 && fill_bits_count] fill_style1
+	UB[has_line_style && line_bits_count] line_style
 	SWF_STYLES[has_new_styles] styles
 :
 
@@ -130,52 +130,52 @@ SHAPE_RECORD_EDGE_TYPE=
 =
 
 SHAPE_RECORD_DATA_EDGE:
-	INTBITS[1] <SHAPE_RECORD_EDGE_TYPE> edge_type
+	UB[1] <SHAPE_RECORD_EDGE_TYPE> edge_type
 	SHAPE_RECORD_DATA_EDGE_POINTS_{edge_type} points
 :
 
 SHAPE_RECORD_DATA_EDGE_POINTS_EDGE:
-	INTBITS[4] coord_size
+	UB[4] coord_size
 	EVAL coord_real_size = coord_size + 2
-	INTBITS[1] line_has_x_and_y
-	SIB[line_has_x_and_y && coord_real_size] control_delta_x
-	SIB[line_has_x_and_y && coord_real_size] control_delta_y
-	INTBITS[!line_has_x_and_y] line_has_x_or_y
-	SIB[line_has_x_or_y && coord_real_size] anchor_delta_x
-	SIB[!line_has_x_and_y && !line_has_x_or_y && coord_real_size] anchor_delta_y
+	UB[1] line_has_x_and_y
+	SB[line_has_x_and_y && coord_real_size] control_delta_x
+	SB[line_has_x_and_y && coord_real_size] control_delta_y
+	UB[!line_has_x_and_y] line_has_x_or_y
+	SB[line_has_x_or_y && coord_real_size] anchor_delta_x
+	SB[!line_has_x_and_y && !line_has_x_or_y && coord_real_size] anchor_delta_y
 :
 
 SHAPE_RECORD_DATA_EDGE_POINTS_CURVE:
-	INTBITS[4] coord_size
+	UB[4] coord_size
 	EVAL coord_real_size = coord_size + 2
-	SIB[coord_real_size] control_delta_x
-	SIB[coord_real_size] control_delta_y
-	SIB[coord_real_size] anchor_delta_x
-	SIB[coord_real_size] anchor_delta_y
+	SB[coord_real_size] control_delta_x
+	SB[coord_real_size] control_delta_y
+	SB[coord_real_size] anchor_delta_x
+	SB[coord_real_size] anchor_delta_y
 :
 
 
 LINE_STYLES:
-	INT8 count
+	UI8 count
 	LINE_STYLE[count] line_styles
 :
 
 LINE_STYLE:
-	INT16 width
+	UI16 width
 	RGB color
 :
 
 SHAPE_WITH_STYLE:
 	FILL_STYLES fill_styles
 	LINE_STYLES line_styles
-	INTBITS[4]	fill_bits_count
-	INTBITS[4]	line_bits_count
+	UB[4]	fill_bits_count
+	UB[4]	line_bits_count
 	SHAPE_RECORD[] shape_records
 	SKIPBITS[]
 :
 
 TAG_DATA_DEFINESHAPE:
-	INT16	ShapeID
+	UI16	ShapeID
 	RECT   ShapeBounds
 	SHAPE_WITH_STYLE shapes_with_style
 :
@@ -189,7 +189,7 @@ PUSH_DATA_STRING:
 :
 
 PUSH_DATA_FLOAT:
-	INT32 float
+	UI32 float
 :
 
 PUSH_DATA_NULL:
@@ -203,24 +203,24 @@ PUSH_DATA_REGISTER:
 :
 
 PUSH_DATA_BOOL:
-	INT8 n
+	UI8 n
 :
 
 PUSH_DATA_INTEGER:
-	INT32 n
+	UI32 n
 :
 
 PUSH_DATA_DOUBLE:
-	INT32 n1
-	INT32 n2
+	UI32 n1
+	UI32 n2
 :
 
 PUSH_DATA_REFERENCE:
-	INT8 reference
+	UI8 reference
 :
 
 PUSH_DATA_REFERENCE2:
-	INT16 reference
+	UI16 reference
 :
 
 PUSH_DATA_TYPE=
@@ -260,19 +260,19 @@ ACTION_TYPE=
 =
 
 PUSH_DATA:
-	INT8 <PUSH_DATA_TYPE> type
+	UI8 <PUSH_DATA_TYPE> type
 	PUSH_DATA_{type} data
 :
 
 ACTION_PUSH_DATA:
-	INT16 length
+	UI16 length
 	EVAL DATA_END = length
 	PUSH_DATA[] data
 :
 
 ACTION_BRANCH_IF_TRUE:
-	INT16 length
-	INT16 offset
+	UI16 length
+	UI16 offset
 :
 
 ACTION_CALL_FUNCTION:
@@ -308,40 +308,40 @@ ACTION_TOGGLE_QUALITY:
 :
 
 ACTION_GOTO_LABEL:
-	INT16 length
+	UI16 length
 	CSTRING label
 :
 
 ACTION_GOTO_FRAME:
-	INT16 length
-	INT16 frame
+	UI16 length
+	UI16 frame
 :
 
 ACTION_WAIT_FOR_FRAME:
-	INT16 length
-	INT16 frame
-	INT8 skip_count
+	UI16 length
+	UI16 frame
+	UI8 skip_count
 :
 
 ACTION_SET_TARGET:
-	INT16 length
+	UI16 length
 	CSTRING name
 :
 
 ACTION_GET_URL:
-	INT16 length
+	UI16 length
 	CSTRING url
 	CSTRING target
 :
 
 
 ACTION_*:
-	INT16[long_action] length
+	UI16[long_action] length
 	HEXDATA[length] data
 :
 
 ACTIONRECORD:
-	INT8 action_number
+	UI8 action_number
 	EVAL <ACTION_TYPE> action_type = action_number
 	EVAL long_action = action_number & 0x80 && 1
 	ACTION_{action_type} action
@@ -356,36 +356,36 @@ BUTTON_TYPE=
 =
 
 CXFORM:
-	INTBITS[1] has_add
-	INTBITS[1] has_mult
-	INTBITS[4] nbits
-	INTBITS[has_mult && nbits] red_mult_value
-	INTBITS[has_mult && nbits] green_mult_value
-	INTBITS[has_mult && nbits] blue_mult_value
-	INTBITS[has_add && nbits] red_add_value
-	INTBITS[has_add && nbits] green_add_value
-	INTBITS[has_add && nbits] blue_add_value
+	UB[1] has_add
+	UB[1] has_mult
+	UB[4] nbits
+	UB[has_mult && nbits] red_mult_value
+	UB[has_mult && nbits] green_mult_value
+	UB[has_mult && nbits] blue_mult_value
+	UB[has_add && nbits] red_add_value
+	UB[has_add && nbits] green_add_value
+	UB[has_add && nbits] blue_add_value
 	SKIPBITS[]
 :
 
 BUTTONRECORD2:
-	INTBITS[4] reserved
-	INTBITS[1] state_hit_test
-	INTBITS[1] state_down
-	INTBITS[1] state_over
-	INTBITS[1] state_up
+	UB[4] reserved
+	UB[1] state_hit_test
+	UB[1] state_down
+	UB[1] state_over
+	UB[1] state_up
 	EVAL BREAK = ! reserved && ! state_hit_test &&  ! state_down && ! state_over && ! state_up
 	#EVAL ARRAY_LAST = BUTTONRECORD2
-	INT16 character
-	INT16 layer
+	UI16 character
+	UI16 layer
 	MATRIX matrix
 	CXFORM cxform
 :
 
 TAG_DATA_DEFINEBUTTON2:
-	INT16 button_id
-	INT8 flags
-	INT16 offset
+	UI16 button_id
+	UI8 flags
+	UI16 offset
 	BUTTONRECORD2[] button_records
 	ACTIONCONDITIONS[offset && 1] action_conditions
 :
@@ -395,25 +395,25 @@ ACTIONCONDITIONS:
 :
 
 ACTIONCONDITION:
-	INT16 next_action_offset
-	INT16 condition
+	UI16 next_action_offset
+	UI16 condition
 	ACTIONRECORD[] actions
 	EVAL ARRAY_LAST = ! next_action_offset
 :
 
 TAG_DATA_PLACEOBJECT2:
-	INTBITS[2] reserved
-	INTBITS[1] has_name
-	INTBITS[1] has_ratio
-	INTBITS[1] has_color_transform
-	INTBITS[1] has_matrix
-	INTBITS[1] has_character
-	INTBITS[1] move
-	INT16 depth
-	INT16[has_character] character_id
+	UB[2] reserved
+	UB[1] has_name
+	UB[1] has_ratio
+	UB[1] has_color_transform
+	UB[1] has_matrix
+	UB[1] has_character
+	UB[1] move
+	UI16 depth
+	UI16[has_character] character_id
 	MATRIX[has_matrix] matrix
 	CXFORM[has_color_transform] cxform
-	INT16[has_ratio] ratio
+	UI16[has_ratio] ratio
 	CSTRING[has_name] name 
 :
 
@@ -422,26 +422,26 @@ TAG_DATA_END:
 :
 
 TAGGED_BLOCK:
-	INT16 tag_id_len = tag_id << 6 & short_len
+	UI16 tag_id_len = tag_id << 6 & short_len
 	EVAL <TAGID> tag_id = tag_id_len >> 6
 	EVAL short_len = tag_id_len & 0x3f
 	EVAL long_len_size = int(short_len == 0x3f)
-	INT32[long_len_size] long_len
+	UI32[long_len_size] long_len
 	EVAL length = long_len or short_len
 	EVAL DATA_END = length
 	TAG_DATA_{tag_id} data
 :
 
 RGB:
-	INT8 R
-	INT8 G
-	INT8 B
+	UI8 R
+	UI8 G
+	UI8 B
 :
 
 RGBA:
-	INT8 R
-	INT8 G
-	INT8 B
-	INT8 A
+	UI8 R
+	UI8 G
+	UI8 B
+	UI8 A
 :
 

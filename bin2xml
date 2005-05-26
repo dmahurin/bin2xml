@@ -134,7 +134,7 @@ close(FMT);
 $text =~ s:\/\/.*(?=$)::gm;
 $text =~ s:#.*(?=$)::gm;
 
-$primative_sizebits{"INT8"} =  $primative_sizebits{"CHAR"} = 
+$primative_sizebits{"UI8"} =  $primative_sizebits{"CHAR"} = 
 $primative_sizebits{"UUDATA"} =
 $primative_sizebits{"HEXDATA"} =
 $primative_sizebits{"SKIPBYTE"} = 8;
@@ -142,13 +142,13 @@ $primative_sizebits{"SKIPBYTE"} = 8;
 $primative_sizebits{"BITVECTOR"} =
 $primative_sizebits{"BITBITS"} =
 $primative_sizebits{"HEXBITS"} =
-$primative_sizebits{"INTBITS"} =
-$primative_sizebits{"SIB"} =
+$primative_sizebits{"UB"} =
+$primative_sizebits{"SB"} =
 $primative_sizebits{"SKIPBITS"} = 1;
 
-$primative_sizebits{"INT16"} = 16;
+$primative_sizebits{"UI16"} = 16;
 $primative_sizebits{"INT24"} = 24;
-$primative_sizebits{"INT32"} = 32;
+$primative_sizebits{"UI32"} = 32;
 
 $primative_read{"CSTRING"} =
 sub
@@ -181,8 +181,8 @@ sub
    return $bufref;
 };
 
-# store INTBITS as padded INT32's in memory
-$primative_fromraw{"INTBITS"} =
+# store UB as padded UI32's in memory
+$primative_fromraw{"UB"} =
 sub
 {
 	my($bufref, $len) = @_;
@@ -210,8 +210,8 @@ sub unpack_signed_ints
 	return @out2;
 }
 
-# store INTBITS as padded INT32's in memory
-$primative_fromraw{"SIB"} =
+# store UB as padded UI32's in memory
+$primative_fromraw{"SB"} =
 sub
 {
 	my($bufref, $len) = @_;
@@ -273,8 +273,8 @@ sub
 	return \$sbuf;
 };
 
-# store INTBITS as integers in memory.
-$primative_toraw{"INTBITS"} = 
+# store UB as integers in memory.
+$primative_toraw{"UB"} = 
 sub
 {
 	my($bufref, $len) = @_;
@@ -292,7 +292,7 @@ sub
 	return undef;
 };
 
-$primative_fromraw{"INT32"} =
+$primative_fromraw{"UI32"} =
 sub
 {
    my($bufref) = @_;
@@ -300,7 +300,7 @@ sub
    return \@bufout;
 };
 
-$primative_fromraw{"INT8"} =
+$primative_fromraw{"UI8"} =
 sub
 {
    my($bufref) = @_;
@@ -308,7 +308,7 @@ sub
    return \@bufout;
 };
 
-$primative_toraw{"INT8"} =
+$primative_toraw{"UI8"} =
 sub
 {
    my($bufref) = @_;
@@ -316,7 +316,7 @@ sub
    return \$bufout;
 };
 
-$primative_fromraw{"INT16"} =
+$primative_fromraw{"UI16"} =
 sub
 {
    my($bufref) = @_;
@@ -324,7 +324,7 @@ sub
    return \@bufout;
 };
 
-$primative_toraw{"INT16"} =
+$primative_toraw{"UI16"} =
 sub
 {
    my($bufref) = @_;
@@ -332,7 +332,7 @@ sub
    return \$bufout;
 };
 
-# pad INT24 to INT32's
+# pad INT24 to UI32's
 $primative_fromraw{"INT24"} =
 sub
 {
@@ -368,7 +368,7 @@ sub
 };
 
 
-$primative_toraw{"INT32"} =
+$primative_toraw{"UI32"} =
 sub
 {
    my($bufref) = @_;
@@ -538,12 +538,12 @@ sub
 	return \$buf;
 };
 
-$primative_tostring{"INT8"} =
-$primative_tostring{"INT16"} = 
+$primative_tostring{"UI8"} =
+$primative_tostring{"UI16"} = 
 $primative_tostring{"INT24"} = 
-$primative_tostring{"INT32"} =
-$primative_tostring{"INTBITS"} =
-$primative_tostring{"SIB"} =
+$primative_tostring{"UI32"} =
+$primative_tostring{"UB"} =
+$primative_tostring{"SB"} =
 $primative_tostring{"CSTRING"} =
 sub
 {
@@ -551,11 +551,11 @@ sub
    return (join ",", @$bufref);
 };
 
-$primative_fromstring{"INT8"} =
-$primative_fromstring{"INT16"} =
+$primative_fromstring{"UI8"} =
+$primative_fromstring{"UI16"} =
 $primative_fromstring{"INT24"} =
-$primative_fromstring{"INT32"} =
-$primative_fromstring{"INTBITS"} =
+$primative_fromstring{"UI32"} =
+$primative_fromstring{"UB"} =
 $primative_fromstring{"CSTRING"} =
 sub
 {
