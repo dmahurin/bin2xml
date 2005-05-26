@@ -3,7 +3,7 @@
 =
 
 MAIN:
-	OFFSET_START
+	EVAL OFFSET_START
 	CHAR[12] <IFO_TYPE> ifo_type
 	{ifo_type} ifo
 :
@@ -97,7 +97,7 @@ PGCI_SRP:
 // VTSM_LU, VMGM_LU
 //        Video Manager Menu Language Unit Table
 LU_EA:
-	OFFSET_START
+	EVAL OFFSET_START
 	INT16 num_pgci_srp
 	INT16 reserved
 	INT32 lu_ea_end_byte
@@ -116,7 +116,7 @@ PGCI_LU:
 
 // Video Manager Menu PGCI Unit Table
 PGCI_UT:
-	OFFSET_START
+	EVAL OFFSET_START
 	INT16 num_pgci_lu
 	SKIPBYTE[2] unused
 	INT32 pgci_lu_table_end_byte
@@ -254,7 +254,7 @@ SUBPICTURE_STREAM_STATUS:
 :
 
 PGC:
-	OFFSET_START
+	EVAL OFFSET_START
 	INT16  unknown1 // -- end byte ?
 	INT8 num_programs
 	INT8 num_cells
@@ -315,7 +315,7 @@ PTT:
 
 // PartOfTitle search pointer table info
 PTT_SRPT:
-	OFFSET_START
+	EVAL OFFSET_START
 	INT16 num_titles // TTUs in the VTS
 	SKIPBYTE[2] zero1 // reserved
 	INT32 end_byte
@@ -383,7 +383,7 @@ VTS_ATR:
 
 # Video Title Set Attribute Table
 VMG_VTS_ATRT:
-	OFFSET_START
+	EVAL OFFSET_START
 	INT16 num_vts_atr
 	INT16 reserved
 	INT32 table_end_byte
@@ -392,7 +392,7 @@ VMG_VTS_ATRT:
 :
 
 PGCIT:
-	OFFSET_START
+	EVAL OFFSET_START
 	INT16 num_pgci_srp
 	INT16 reserved1
 	INT32 pgcit_end_byte
@@ -408,7 +408,7 @@ TMAP:
 :
 
 TMAPTI:
-	OFFSET_START
+	EVAL OFFSET_START
 	INT16 num_tmaps
 	INT16 reserved1
 	INT32 tmaps_end_byte
@@ -445,7 +445,7 @@ C_ADT:
 :
 
 VOBU_ADMAP:
-	OFFSET_START
+	EVAL OFFSET_START
 	INT32 end_address
 	INT32[(end_address-3)/4] vobu_start_sectors
 :
@@ -551,24 +551,6 @@ IFO_TYPE=
 	"DVDVIDEO-VTS" "VTSI"
 =
 	
-
-
-TEST:
-	INT32 CTYPE type
-	CHAR[3] CNAME name
-	M m
-:
-
-CNAME=
-	A "Andy"
-	B "Bob"
-=
-
-
-YESNO=
-	0	no
-	1	yes
-=
 
 USER_OPS=
 	0 time-play

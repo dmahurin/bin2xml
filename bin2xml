@@ -10,13 +10,19 @@
 
 use POSIX;
 
+my $ui32_pack = 'N';
+my $uib32_pack = 'N';
+my $ui16_pack = 'n';
+
 my $bitbufin = '';
 my $bitbufout = '';
 
 my %translations;
 my %reverse_translations;
 
-my $debug = 0;
+#my $debug = 1;
+
+#my $minimal_xml = 1;
 
 
 sub read_bits
@@ -91,6 +97,8 @@ sub parse_translation
 	for my $line (split(/\s*\n\s*/ms, $lines))
 	{
 		my($from, $to) = split_strings($line);
+		$from = hex($from) if($from =~ /^0x/);
+		$to = hex($to) if($from =~ /^0x/);
 		next if(! defined($from));
 		next if($from eq "" and $to eq "");
 		$translation{$from} = $to;
@@ -135,6 +143,7 @@ $primative_sizebits{"BITVECTOR"} =
 $primative_sizebits{"BITBITS"} =
 $primative_sizebits{"HEXBITS"} =
 $primative_sizebits{"INTBITS"} =
+$primative_sizebits{"SIB"} =
 $primative_sizebits{"SKIPBITS"} = 1;
 
 $primative_sizebits{"INT16"} = 16;
@@ -148,16 +157,16 @@ sub
 	my($outbuf) = "";
 	while($count--)
 	{
-print "r$count\n";
+#print "CSTRING r$count\n";
 		my($c);
 		do
 		{
-			last unless(read($fh, $c, $1));
+			last unless(read($fh, $c, 1));
 			$outbuf .= $c;
 		}
 		while($c ne "\0");
 	}
-	print "out: $outbuf\n";
+#	print "CSTRING out: $outbuf\n";
 	return $outbuf;
 };
 
@@ -172,7 +181,6 @@ sub
    return $bufref;
 };
 
-
 # store INTBITS as padded INT32's in memory
 $primative_fromraw{"INTBITS"} =
 sub
@@ -184,7 +192,37 @@ sub
 	my($prebits) = '';
 	while($align--) { $prebits .= '0'}
 
-	my(@bufout) = unpack("N*", pack("B*", $prebits . $bits));
+	my(@bufout) = unpack("${uib32_pack}*", pack("B*", $prebits . $bits));
+	return \@bufout;
+};
+
+sub unpack_signed_ints
+{
+	my($form, $data) = @_;
+	my(@out) = unpack($form, $data);
+	my(@out2);
+	my($out);
+	while( defined($out = shift(@out)))
+	{
+		if($out >= 0x80000000) { $out -= 0x80000000; $out -= 0x80000000; }
+		push(@out2, $out);
+	} 
+	return @out2;
+}
+
+# store INTBITS as padded INT32's in memory
+$primative_fromraw{"SIB"} =
+sub
+{
+	my($bufref, $len) = @_;
+	my($bits) = unpack("B$len", $$bufref);
+	my($align) = 32 - ( $len % 32);
+	$align = 0 if($align == 32);
+	my($prebits) = '';
+	my($fillbit) = substr($bits, 0, 1);
+	while($align--) { $prebits .= $fillbit}
+
+	my(@bufout) = unpack_signed_ints("${uib32_pack}*", pack("B*", $prebits . $bits));
 	return \@bufout;
 };
 
@@ -240,7 +278,7 @@ $primative_toraw{"INTBITS"} =
 sub
 {
 	my($bufref, $len) = @_;
-	my($bits) = unpack("B*", pack("N*", @$bufref));
+	my($bits) = unpack("B*", pack("${uib32_pack}*", @$bufref));
 	my($align) = 32 - ($len % 32);
 	$align = 0 if($align == 32);
 	my($buf) = pack("B*", substr($bits, $align));
@@ -258,7 +296,7 @@ $primative_fromraw{"INT32"} =
 sub
 {
    my($bufref) = @_;
-   my(@bufout) = unpack('N*', $$bufref);
+   my(@bufout) = unpack("${ui32_pack}*", $$bufref);
    return \@bufout;
 };
 
@@ -282,7 +320,7 @@ $primative_fromraw{"INT16"} =
 sub
 {
    my($bufref) = @_;
-   my(@bufout) = unpack('n*', $$bufref);
+   my(@bufout) = unpack("${ui16_pack}*", $$bufref);
    return \@bufout;
 };
 
@@ -290,7 +328,7 @@ $primative_toraw{"INT16"} =
 sub
 {
    my($bufref) = @_;
-   my($bufout) = pack('n*', @$bufref);
+   my($bufout) = pack("${ui16_pack}*", @$bufref);
    return \$bufout;
 };
 
@@ -334,8 +372,22 @@ $primative_toraw{"INT32"} =
 sub
 {
    my($bufref) = @_;
-   my($bufout) = pack('N*', @$bufref);
+   my($bufout) = pack("${ui32_pack}*", @$bufref);
    return \$bufout;
+};
+
+$primative_tostring{"EVAL"} =
+sub
+{
+	my($dataref) = @_;
+	return $dataref;
+};
+
+$primative_fromstring{"EVAL"} =
+sub
+{
+	my($str) = @_;
+	return $str;
 };
 
 $primative_tostring{"HEXDATA"} =
@@ -491,6 +543,7 @@ $primative_tostring{"INT16"} =
 $primative_tostring{"INT24"} = 
 $primative_tostring{"INT32"} =
 $primative_tostring{"INTBITS"} =
+$primative_tostring{"SIB"} =
 $primative_tostring{"CSTRING"} =
 sub
 {
@@ -513,25 +566,28 @@ sub
 
 while(1)
 {
-if($text =~ m%^\s*([\w]+):\s*\n\s*([^:]+)\s*\n:\n%s )
+#if($text =~ m%^\s*([\w]+\*?):\s*\n\s*([^:]*)\s*\n:\n%s )
+if($text =~ m%^\s*([\w]+\*?):\s*\n\s*([^:]*):\n%s )
 {
 	my($structname) = $1;
 	my($fields) = $2;
+	print "struct: $structname\n" if($debug);
+	@{$structs{$structname}} = ();
 
 	my $i = 1;
         for my $field (split(/\s*\n\s*/ms, $fields))
         {
 		next if $field eq "";
-		$field =~ m:^
+		unless($field =~ m:^
 			(\[([^\]]*)\]\s*)? # [$2]
 			(([\w{}]+)(\s*\[([^\[\]]+)\])?\@)? # $4[$6]@
 			([\w{}]+)(\s*\[([^\[\]]*)\])? # $7[$9]
 			(\s+\<([\w{}]+)\>)? # <$11>
 			(\s+((\w+)\@)?(\w+))? # 14@15
 			(\s=\s*(.*))? # =17
-			$:x;
+			$:x) { print "RRR $field\n"; }
 		my($offset, $ptype, $pcount, $type, $count, $trans, $pname, $name, $value) = ($2, $4, $6, $7, $9, $11, $14, $15, $17);
-		print '($offset, $ptype, $pcount, $type, $count, $trans, $pname, $name) = ($2, $4, $6, $7, $9, $11, $14, $15) = ' . "$offset, $ptype, $pcount, $type, $count, $trans, $pname, $name\n" if ($debug);
+		print '($offset, $ptype, $pcount, $type, $count, $trans, $pname, $name, $value) = ($2, $4, $6, $7, $9, $11, $14, $15, $17) = ' . "$offset, $ptype, $pcount, $type, $count, $trans, $pname, $name, $value\n" if ($debug);
                 $count = 1 unless(defined($count));
 		undef $count if($count eq '');
 		$name = $type . $i unless(defined($name));
@@ -571,6 +627,19 @@ for my $structname (keys %structs)
 		my($type, $count) = @$fields;
 		print "fields: type $type, name $name, size $count\n" if($debug);
 	}
+}
+
+if($translations{""}->{"BYTE_ORDER"} eq 'vax')
+{
+	$ui32_pack = 'V';
+	$ui16_pack = 'v';
+	$uib32_pack = 'V';
+}
+elsif($translations{""}->{"BYTE_ORDER"} eq 'vax_except_bits')
+{
+	$ui32_pack = 'V';
+	$ui16_pack = 'v';
+	$uib32_pack = 'N';
 }
 
 
@@ -616,62 +685,84 @@ close(OUTFILE);
 
 sub struct_read
 {
-	my($type, $struct_start) = @_;
+	my($type, $parent_structs, $struct_start, $struct_end, $array_last) = @_;
 	printf "read struct: %x %x (%d)\n", tell(INFILE), tell(INFILE) - $struct_start, tell(INFILE) - $struct_start if($debug);
 	my(%this_struct);
-	unless(defined($struct_start))
+#	unless(defined($struct_start))
+#	{
+#		$struct_start = tell(INFILE);
+#	}
+
+	unless(defined($parent_structs))
 	{
-		$struct_start = tell(INFILE);
+		$parent_structs = [];
 	}
-	
+
 	for my $name_fields (@{$structs{$type}})
 	{
 		my($fname, $fields) = @$name_fields;
 		my($ftype, $fcount, $ftrans, $fvalue, $foffset, $fptype, $fpname, $fpcount) = @$fields;
 		my($fdata);
 		my($fcountset, $fpcountset);
-print "read: $type: $ftype, $fname, fc = $fcount, $foffset\n" if($debug);
 
 		$ftype = expand_struct_type(\%this_struct, $type, $ftype);
 		$ftrans = expand_struct_type(\%this_struct, $type, $ftrans);
 			
-		if($ftype eq "OFFSET_START")
-		{
-			$struct_start = tell(INFILE);
-			next;
-		}
 
 		my($pos);
 		
-		# empty fcount means everything
+		# empty fcount means remaining bits or everything
 		if((!defined($fcount)) || $fcount eq '')
 		{
-			my $pos = tell(INFILE);
-			seek(INFILE, 0, 2);
-			my $endpos = tell(INFILE);
-			seek(INFILE, $pos, 0);
 			my($sizebits) = $primative_sizebits{$ftype};
 			$sizebits = struct_size($ftype) unless(defined($sizebits));
-			$fcount = int (($endpos-$pos) * 8/$sizebits);
+			if($sizebits == 1)
+			{
+				$fcount = length($bitbufin);
+			}
+			else
+			{
+				my $pos = tell(INFILE);
+				my $endpos  = $struct_end;
+				unless(defined($endpos))
+				{
+					seek(INFILE, 0, 2);
+					$endpos = tell(INFILE);
+					seek(INFILE, $pos, 0);
+				}
+				if(defined($sizebits))
+				{
+				$fcount = int (($endpos-$pos) * 8/$sizebits);
+				}
+				else
+				{ $fcount = -1; }
+			}
 		}
 		else
 		{
-			($fcount, $fcountset) = &struct_expression(\%this_struct, $fcount);
-			next unless($fcount);
+			($fcount, $fcountset) = &struct_expression(\%this_struct, $fcount, $parent_structs);
+			#next unless($fcount);
 			#print "count: $fcount, $fcountset\n";
 		}
+		if(defined($fcount) and $fcount == 0)
+		{
+			@{$this_struct{$fname}} = (undef, 0, 0);
+			next;
+		}
+print "pos: " . tell(INFILE) . "\n" if($debug);
+print "read: $type: $ftype, name=$fname, count = $fcount, offset=$foffset LAST $array_last\n" if($debug);
 		$fcountset = $fcount unless(defined($fcountset) and
 			$fcountset <= $fcount);
 		#print "pcount in: $fpcount\n";
 
-		($fpcount, $fpcountset) = &struct_expression(\%this_struct, $fpcount);
+		($fpcount, $fpcountset) = &struct_expression(\%this_struct, $fpcount, $server_struct);
 		#print "pcount: $fpcount\n";
 		$fpcountset = $fpcount unless(defined($fpcountset) 
 			and $fpcountset <= $fpcount);
 #print "fff: $type: $ftype, $fname, fsc = $fcountset, fc = $fcount, $foffset\n";
 		if(defined($foffset))
 		{
-			$foffset = &struct_expression(\%this_struct, $foffset, $struct_start);
+			$foffset = &struct_expression(\%this_struct, $foffset, $parent_structs, $struct_start);
 			next unless($foffset);
 			$pos = tell(INFILE);
 
@@ -681,7 +772,7 @@ print "read: $type: $ftype, $fname, fc = $fcount, $foffset\n" if($debug);
 			
 		}
 printf ("off: ($ftype) %x %x + %d\n", tell(INFILE), tell(INFILE) - $struct_start, length($bitbufin)) if($debug);
-		$fvalue = struct_expression(\%this_struct, $fvalue)
+		$fvalue = struct_expression(\%this_struct, $fvalue, $parent_structs)
 			if(defined($fvalue));
 		if(defined($primative_sizebits{$ftype}))
 		{
@@ -690,8 +781,9 @@ printf ("off: ($ftype) %x %x + %d\n", tell(INFILE), tell(INFILE) - $struct_start
 			return \%this_struct unless (defined($buf));
 
 			$fdata = &{$primative_fromraw{$ftype}}(\$buf, $fcountset);
-			print "assertion failed: ", fdata_value($fdata), " != $fvalue\n"
-				if(defined($fvalue) && ! fdata_equals($fdata, $fvalue));
+# assertion not ready
+#			print "assertion failed: ", fdata_value($fdata), " != $fvalue\n"
+		#		if(defined($fvalue) && ! fdata_equals($fdata, $fvalue));
 		}
 		elsif(defined($primative_read{$ftype}))
 		{
@@ -702,13 +794,27 @@ printf ("off: ($ftype) %x %x + %d\n", tell(INFILE), tell(INFILE) - $struct_start
 		}
 		elsif(defined($structs{$ftype}))
 		{
+			my $this_array_last = 0;
+			$array_last = \$this_array_last unless(defined($array_last));
 			#print "struct in: $ftype ($fcountset of $fcount)\n";
+			my $array_last = 0;
 			my $i;
-			for ($i = 0 ; $i < $fcountset; $i++)
+
+			push(@$parent_structs, \%this_struct);
+			for ($i = 0 ; $fcountset < 0 || $i < $fcountset; $i++)
 			{
 				push(@{$fdata} ,
-				struct_read($ftype, $struct_start));
+				struct_read($ftype, $parent_structs,$struct_start, $struct_end, $array_last ));
+				last if(defined($struct_end) and tell(INFILE) >= $struct_end);
+
+				if(defined($array_last) and ( $$array_last == 1 or $$array_last eq $ftype))
+				{
+					$$array_last = undef;
+					last;
+				}
 			}
+			pop(@$parent_structs);
+
 			my $countunset = $fcount - $fcountset;
 			print "reads: $ftype $fcountset,$fcount\n" if($debug);
 			read_bits(\*INFILE, $countunset *
@@ -724,6 +830,35 @@ printf ("off: ($ftype) %x %x + %d\n", tell(INFILE), tell(INFILE) - $struct_start
 			print STDERR "unknown type: $ftype\n";
 		}
 
+		if($ftype eq "EVAL")
+		{
+			if($fname eq "DATA_END")
+			{
+
+				
+				$struct_end = tell(INFILE) + $fdata;
+				next;
+			}
+			if($fname eq "OFFSET_START")
+			{
+				$struct_start = tell(INFILE);
+				next;
+			}
+			if($fname eq "ARRAY_LAST" or $fname eq "LAST")
+			{
+				$$array_last = $fdata if(defined($array_last));
+				next;
+			}
+			if($fname eq "BREAK")
+			{
+				if(defined($array_last))
+				{
+					$$array_last = $fdata;
+					if($fdata) { last; }
+					else { next; }
+				}
+			}
+		}
 
 		#print "set struct $fname ($fcountset)\n";
 		@{$this_struct{$fname}} = ($fdata, $fcountset, $fcount)
@@ -743,11 +878,14 @@ printf ("off: ($ftype) %x %x + %d\n", tell(INFILE), tell(INFILE) - $struct_start
 				#print "seek from $prevpos to $newpos\n";
 				print "seek error: $!\n"
 				unless(seek(INFILE, $newpos, 0));
+
+			        push(@$parent_structs, \%this_struct);
 				for (my $pi = 0 ; $pi < $fpcount; $pi++)
 				{
 					push(@$fpdata ,
-						struct_read($fptype, $struct_start));
+						struct_read($fptype, $parent_structs, $struct_start, $struct_end, $array_last));
 				}
+				pop(@$parent_structs);
 				@{$this_struct{$fpname}} = ($fpdata, $fpcountset, $fpcount)
 				if(defined($fpdata));
 			}
@@ -755,6 +893,7 @@ printf ("off: ($ftype) %x %x + %d\n", tell(INFILE), tell(INFILE) - $struct_start
 		}
 #		seek(INFILE, $pos, 0 ) if(defined($pos));
 	}
+print "read-out: $type: $ftype, name=$fname LAST $array_last\n" if($debug);
 	return \%this_struct;
 }
 
@@ -766,7 +905,7 @@ sub expand_struct_type
 	{
 		my $othername = $1;
 		my ($before, $after) = ($`,$');
-		$othername = "DEFAULT" unless(defined($structref->{$othername}));
+		$othername = "*" unless(defined($structref->{$othername}));
 		last unless(defined($structref->{$othername}));
 		my $otherfields = $struct_fields{$type}->{$othername};
 		last unless(defined($otherfields));
@@ -777,14 +916,60 @@ sub expand_struct_type
 		my $s = &{$primative_tostring{$othertype}}($data, $othercount);
 		$s = $translations{$othertrans}->{$s}
 		if(defined($othertrans) and defined($translations{$othertrans}) and defined($translations{$othertrans}->{$s}));
+		$s = "*" unless(defined($structs{$before.$s.$after}));
 		$ftype = $before . $s . $after;
 	}
 	return $ftype;
 }
 
+sub expression_value
+{
+	my($value) = @_;
+	
+	return "()" unless(defined($value));
+	return "''" if($value eq '');
+	return "'$value'" if($value =~ m:[^\d]:);
+	return $value;
+}
+
+sub data_expression_value
+{
+	my($data) = @_;
+	if(ref($data) eq 'ARRAY')
+	{
+	#	return $data->[0];
+		my $size = @{$data};
+		# return last element
+		return $size ? expression_value($data->[$size -1]) : 0;
+	}
+	elsif(ref $data)
+	{
+		#print "dsd $1\n";
+		#print ref $this_struct->{$1}->[0];
+		#$buf2 .= $this_struct->{$1}->[0];
+		return expression_value(${$data});
+	}
+	else
+	{
+		return expression_value($data);
+	}
+}
+
+sub parent_data
+{
+	my($parent_structs, $name) = @_;
+	my(@structs) = @$parent_structs;
+	while(@structs)
+	{
+		my $struct = pop(@structs);
+		return $struct->{$name}->[0] if(defined($struct->{$name}));
+	}
+	return undef;
+}
+
 sub struct_expression
 {
-	my($this_struct, $buf, $struct_start) = @_;
+	my($this_struct, $buf, $parent_structs, $struct_start) = @_;
 	return $buf unless($buf =~ /\D/);
 	my($buf2) = '';
 	while($buf =~ m:([A-Za-z]\w*):)
@@ -795,17 +980,17 @@ sub struct_expression
 		{
 			$buf2 .= $struct_start;
 		}
-		elsif(ref($this_struct->{$1}->[0]) eq 'ARRAY')
+		elsif(defined($this_struct->{$1}) )
 		{
-		#	$buf2 .= $this_struct->{$1}->[0]->[0];
-			my $size = @{$this_struct->{$1}->[0]};
-			# return last element
-			$buf2 .= $this_struct->{$1}->[0]->[$size -1];
+			$buf2 .= data_expression_value($this_struct->{$1}->[0]);
+		}
+		elsif(defined(my $data = parent_data($parent_structs,$1)))
+		{
+			$buf2 .= data_expression_value($data);
 		}
 		else
 		{
-			#$buf2 .= $this_struct->{$1}->[0];
-			$buf2 .= ${$this_struct->{$1}->[0]};
+			$buf2 .= $1;
 		}
 	}
 	$buf2 .= $buf;
@@ -939,10 +1124,13 @@ sub struct_write
 		$ftrans = expand_struct_type($structref, $type, $ftrans);
 		print 'wrf ($ftype, $fcount, $ftrans, $foffset, $fptype, $fpname, $fpcount = ' . "($ftype, $fcount, $ftrans, $foffset, $fptype, $fpname, $fpcount)\n" if($debug);
 
-		if($ftype eq "OFFSET_START")
+		if($ftype eq "EVAL")
 		{
-			$struct_start = tell(OUTFILE);
-			next;
+			if($fname eq "OFFSET_START")
+			{
+				$struct_start = tell(OUTFILE);
+				next;
+			}
 		}
 
 		my($fdata, $fdatacount, $ftotalcount) = 
@@ -992,7 +1180,7 @@ printf ("off: %d(%x) %d(%x) + %d\n", tell(OUTFILE), tell(OUTFILE), tell(OUTFILE)
 			print "seek error: $!\n" unless(
 			seek(OUTFILE, $struct_start + $offset, 0));
 			#print "seekp to $struct_start + $offset\n";
-			print STDERR "$fptype $fptotalcount\n";
+			print STDERR "$fptype $fptotalcount\n" if($debug);
 			write_type(\*OUTFILE, $fptype, $data, $fptotalcount, $struct_start, $fpname);
 			seek(OUTFILE, $prevpos, 0);
 		}
@@ -1079,7 +1267,15 @@ sub write_structs
 			$fcountunset);
 	}
 }
-	
+
+sub data_has_value
+{
+	my($data) = @_;
+	return 0 unless(defined($data));
+	return 0 if(ref $data eq 'ARRAY' and @$data == 0);
+	#print "ref " . ref $data . "$data\n";
+	return 1;
+}
 
 sub struct_write_xml1
 {
@@ -1102,12 +1298,49 @@ sub struct_write_xml1
         for my $field (@{$structs{$type}})
 	{
 		my($ftype, $fname, $fcount) = @$field;
+		next unless(data_has_value($structref->{$fname}));
         	print OUTFILE "$indent<$fname>\n";
 		struct_write_xml($ftype, $fname, $structref->{$fname}, $indent . "\t");
       		print OUTFILE "$indent</$fname>\n";
 	}
       }
    }
+}
+
+#sub struct_has_fields
+#{
+#	my($type) = @_;
+#	for my $name_fields (@{$structs{$type}})
+#	{
+#		my($fname, $fields) =  @$name_fields;
+#		my($ftype, $fcount, $ftrans, $fvalue, $foffset, $fptype, $fpname, $fpsize) = @$fields;
+#		next unless $ftype eq "EVAL";
+#	
+#
+#}
+
+sub get_primative_param_string
+{
+	my($type, $structref) = @_;
+	my(@value_sets);
+        for my $name_fields (@{$structs{$type}})
+        {
+		my($fname, $fields) =  @$name_fields;
+		next unless(defined($structref->{$fname}));
+		my($ftype, $fcount, $ftrans, $fvalue, $foffset, $fptype, $fpname, $fpsize) = @$fields;
+		next unless(defined($primative_tostring{$ftype}));
+		my($fdata, $fdatacount) = @{$structref->{$fname}};
+		my $value  = &{$primative_tostring{$ftype}}($fdata, $fdatacount);
+		if(defined($ftrans) and
+                	defined($translations{$ftrans}) and
+			defined($translations{$ftrans}->{$value}))
+		{
+			$value = $translations{$ftrans}->{$value};
+		}
+
+		push(@value_sets, "$fname=\"$value\""); 
+	}
+	return join(' ', @value_sets);
 }
 		
 sub struct_write_xml
@@ -1120,6 +1353,8 @@ sub struct_write_xml
 		print "unknown struct: $type\n";
 		return;
 	}
+	return unless (%$structref);
+
 	for my $name_fields (@{$structs{$type}})
 	{
 		my($fname, $fields) =  @$name_fields;
@@ -1127,12 +1362,30 @@ sub struct_write_xml
 		$ftype = expand_struct_type($structref, $type, $ftype);
 		$ftrans = expand_struct_type($structref, $type, $ftrans);
 		next if($ftype eq "OFFSET_START");
-                   next unless(defined($structref->{$fname}));
+                next unless(defined($structref->{$fname}));
 		my($fdata, $fdatacount) = @{$structref->{$fname}};
+		next unless(data_has_value($fdata));
 #print "$fname, $ftype, $fcount\n";
-		   if(defined($primative_tostring{$ftype}))
+		   if(!defined($primative_tostring{$ftype}) and $ftype ne "EVAL")
 		   {
+			   for my $substructref (@{$fdata})
+			   {
+				my $tag_params = $minimal_xml ? get_primative_param_string($ftype, $substructref) : "";
+				$tag_params = " " . $tag_params unless($tag_params eq '');
+				   print OUTFILE "$indent<$fname$tag_params>\n";
+				   struct_write_xml($ftype, $substructref, $indent . "\t");
+				   print OUTFILE "$indent</$fname>\n";
+			   }
+		   }
+		elsif(!$minimal_xml)
+		{
 			my $strout;
+			if($ftype eq "EVAL")
+			{
+				$strout = $fdata;
+			}
+			else
+			{
 			if(0 && $debug)
 			{
 				my $p = tell(OUTFILE);
@@ -1141,6 +1394,8 @@ sub struct_write_xml
 			}
 			else
 			{ $strout = &{$primative_tostring{$ftype}}($fdata, $fdatacount); }
+			}
+
 			if(defined($ftrans) and 
 			 defined($translations{$ftrans}) and
 			 defined($translations{$ftrans}->{$strout}))
@@ -1149,19 +1404,7 @@ sub struct_write_xml
 			}
 			print OUTFILE "$indent<$fname>$strout</$fname>\n";
 		   }
-                   elsif($ftype eq "EVAL")
-                   {
-			print OUTFILE "$indent<$fname>$fdata</$fname>\n";
-                   }
-		   else
-		   {
-			   for my $substructref (@{$fdata})
-			   {
-				   print OUTFILE "$indent<$fname>\n";
-				   struct_write_xml($ftype, $substructref, $indent . "\t");
-				   print OUTFILE "$indent</$fname>\n";
-			   }
-		   }
+
                    next unless(defined($fptype));
 		   my($fpdata, $fpdatacount) = @{$structref->{$fpname}};
  
@@ -1191,9 +1434,10 @@ sub struct_size
 		my($fname, $fields) =  @$name_fields;
 		my($ftype, $fcount,$ftrans, $fvalue, $foffset) = @$fields;
 		next if($ftype eq "OFFSET_START");
-		if($fcount =~ /[^\d]/)
+		if($fcount =~ /[^\d*]/)
 		{
-			print "error attempt to get size of dynamic($fcount)  type $ftype $fname in $type\n";
+			print "warn attempt to get size of dynamic($fcount)  type $ftype $fname in $type\n" if ($debug);
+			return undef;
 		}
 		if(defined($foffset))
 		{
@@ -1201,7 +1445,8 @@ sub struct_size
 		}
 		if(defined($structs{$ftype}))
 		{
-			$size += $fcount * struct_size($ftype);
+			my $ssize = struct_size($ftype);
+			$size = defined($ssize) ? $size + $ssize : undef;
 		}
 		elsif(defined($primative_sizebits{$ftype}))
 		{
@@ -1209,7 +1454,8 @@ sub struct_size
 		}
 		else
 		{
-			print "error no size info for '$ftype'\n";
+			print "warn no size info for '$ftype'\n" if($debug);
+			$size = undef;
 		}
 	}
 	return $size;
