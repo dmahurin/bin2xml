@@ -805,13 +805,13 @@ printf ("off: ($ftype) %x %x + %d\n", tell(INFILE), tell(INFILE) - $struct_start
 			{
 				push(@{$fdata} ,
 				struct_read($ftype, $parent_structs,$struct_start, $struct_end, $array_last ));
-				last if(defined($struct_end) and tell(INFILE) >= $struct_end);
 
 				if(defined($array_last) and ( $$array_last == 1 or $$array_last eq $ftype))
 				{
-					$$array_last = undef;
+					$$array_last = 0;
 					last;
 				}
+				last if(defined($struct_end) and tell(INFILE) >= $struct_end);
 			}
 			pop(@$parent_structs);
 
