@@ -121,7 +121,7 @@ SHAPE_RECORD_DATA_SETUP:
 	UB[has_fill_style0 && fill_bits_count] fill_style0
 	UB[has_fill_style1 && fill_bits_count] fill_style1
 	UB[has_line_style && line_bits_count] line_style
-	SWF_STYLES[has_new_styles] styles
+	SHAPE_STYLES[has_new_styles] styles
 :
 
 SHAPE_RECORD_EDGE_TYPE=
@@ -259,6 +259,17 @@ ACTION_TYPE=
 	0x9d BRANCH_IF_TRUE
 =
 
+UNKNOWN:
+:
+
+PUSH_DATA_*:
+	UNKNOWN unknown
+:
+
+PUSH_DATA_BOOLEAN:
+	UI8 bool
+:
+
 PUSH_DATA:
 	UI8 <PUSH_DATA_TYPE> type
 	PUSH_DATA_{type} data
@@ -341,9 +352,11 @@ ACTION_*:
 :
 
 ACTIONRECORD:
-	UI8 action_number
-	EVAL <ACTION_TYPE> action_type = action_number
-	EVAL long_action = action_number & 0x80 && 1
+	#UI8 action_number
+	#EVAL <ACTION_TYPE> action_type = action_number
+	#EVAL long_action = action_number & 0x80 && 1
+	UI8 <ACTION_TYPE> action_type
+	EVAL long_action = action_type & 0x80 && 1
 	ACTION_{action_type} action
 :
 
@@ -417,12 +430,16 @@ TAG_DATA_PLACEOBJECT2:
 	CSTRING[has_name] name 
 :
 
+TAG_DATA_FRAMELABEL:
+	CSTRING label
+:
+
 TAG_DATA_END:
 	EVAL ARRAY_LAST = TAGGED_BLOCK
 :
 
 TAGGED_BLOCK:
-	UI16 tag_id_len = tag_id << 6 & short_len
+	UI16 tag_id_len = tag_id << 6 | short_len
 	EVAL <TAGID> tag_id = tag_id_len >> 6
 	EVAL short_len = tag_id_len & 0x3f
 	EVAL long_len_size = int(short_len == 0x3f)
