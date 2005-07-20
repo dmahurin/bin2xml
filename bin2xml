@@ -592,7 +592,7 @@ sub
 while(1)
 {
 #if($text =~ m%^\s*([\w]+\*?):\s*\n\s*([^:]*)\s*\n:\n%s )
-if($text =~ m%^\s*([\w]+\*?):\s*\n\s*([^:]*):\n%s )
+if($text =~ m%^\s*([\w]+\*?):\s*\n\s*(.*?):\n%s )
 {
 	my($structname) = $1;
 	my($fields) = $2;
@@ -852,6 +852,7 @@ printf ("off: ($ftype) %x %x + %d\n", tell(INFILE), tell(INFILE) - $struct_start
                                 struct_size($ftype))
 					if($countunset);
 		}
+# TODO: should evaluate all at end of struct. put in function shared by struct_read_xml
 		elsif($ftype eq "EVAL")
 		{
 			($fvalue) = struct_expression($struct_fields{$type}, \%this_struct, $fvalue, $parent_structs);
@@ -925,15 +926,22 @@ printf ("off: ($ftype) %x %x + %d\n", tell(INFILE), tell(INFILE) - $struct_start
 #		seek(INFILE, $pos, 0 ) if(defined($pos));
 	}
 
+	#remove hidden values (_evals or _values that match evaluation)
 	for my $fname (keys %{$struct_fields{$type}})
 	{
 	#print STDERR "$type: $fname\n";
 		my $fieldref = $struct_fields{$type}->{$fname};
 		my($ftype, $fcount, $ftrans, $fvalue) = @$fieldref;
 
-		next if($ftype eq "EVAL");
+		next unless ($fname =~ /^_/);
+		undef $this_struct{$fname};
+		next;
 
-		if(defined($fvalue))
+		if($ftype eq "EVAL")
+		{
+			undef $this_struct{$fname};
+		}
+		elsif(defined($fvalue))
 		{
 			my $fvalue0 = $fvalue;
 			($fvalue) = struct_expression($struct_fields{$type}, \%this_struct, $fvalue, $parent_structs);
@@ -1032,7 +1040,7 @@ sub struct_expression
 	return ($buf) unless($buf =~ /\D/);
 	my($buf2) = '';
 	my $buf0 = $buf;
-	while($buf =~ m:([A-Za-z]\w*):)
+	while($buf =~ m:([A-Za-z_]\w*):)
 	{
 		$buf = $'; #';#<-indent fix
 		$buf2 .= $`;
@@ -1092,6 +1100,7 @@ sub string_to_data
 				
 		$fdata =
 		&{$primative_fromstring{$ftype}}($fdata_value, $fcountset);
+		#$fcountset = $fcount = @$fdata unless(defined($fcountset) or ref $fdata ne "ARRAY");
 		$fcountset = $fcount = ceil(length($$fdata)*8/$primative_sizebits{$ftype}) unless(defined($fcountset));
 	}
 	else
@@ -1156,6 +1165,8 @@ sub struct_read_xml
 				if(defined($this_struct{$fname}));
 			my($fcountset, $fpcountset);
 
+			next if($ftype eq "EVAL"); # handled in write
+
 			$ftype = expand_struct_type($struct_fields{$type}, \%this_struct, $ftype);
 			$ftrans = expand_struct_type($struct_fields{$type}, \%this_struct, $ftrans);
 
@@ -1201,11 +1212,12 @@ sub struct_read_xml
 				pop(@$parent_structs);
 				$fcountset = $fcount = @$fdata unless(defined($fcountset));
 			}
-			elsif($ftype eq "EVAL")
-			{
-				($fvalue) = struct_expression($struct_fields{$type}, \%this_struct, $fvalue, $parent_structs);
-				$fdata = $fvalue;
-			}
+			#elsif($ftype eq "EVAL") { next; }
+			#elsif($ftype eq "EVAL")
+			#{
+			#	($fvalue) = struct_expression($struct_fields{$type}, \%this_struct, $fvalue, $parent_structs);
+			#	$fdata = $fvalue;
+			#}
 			@{$this_struct{$fname}} = ($fdata, $fcountset, $fcount);
 			my $rr = \%this_struct;
 			print "xmlin $rr $ftype $fdata $fname $fcount $fcountset\n" if ($debug);
@@ -1214,7 +1226,41 @@ sub struct_read_xml
 		{
 			print "no such field: $fname in $type\n";
 		}
+	}
 
+	# evaluate undefined EVALS
+	for my $fname (keys %{$struct_fields{$type}})
+	{
+		my $fieldref = $struct_fields{$type}->{$fname};
+		my($ftype, $fcount, $ftrans, $fvalue) = @$fieldref;
+		my($fdata) = $this_struct{$fname}->[0];
+
+		next unless($ftype eq "EVAL");
+		next unless(defined($fvalue) and !defined($fdata));
+		#print "un v $fname $fvalue\n" if($fname eq "_have_long_len");
+
+		($fvalue) = struct_expression($struct_fields{$type}, \%this_struct, $fvalue, $parent_structs);
+		#print "un vv $fname $fvalue\n" if($fname eq "_have_long_len");
+		#$this_struct{$fname}->[0] = $fvalue;
+		@{$this_struct{$fname}} = ($fvalue, 1, 1);
+	}
+
+	# evaluate undefined data
+	for my $fname (keys %{$struct_fields{$type}})
+	{
+		my $fieldref = $struct_fields{$type}->{$fname};
+		my($ftype, $fcount, $ftrans, $fvalue) = @$fieldref;
+		my($fdata) = $this_struct{$fname}->[0];
+
+		next if($ftype eq "EVAL");
+		next if(defined($fdata) or !defined($fvalue));
+
+		($fvalue) = struct_expression($struct_fields{$type}, \%this_struct, $fvalue, $parent_structs);
+		next unless(defined($primative_fromstring{$ftype}));
+		my($fdata) = &{$primative_fromstring{$ftype}}($fvalue);
+		my $fcount = ref($fdata) eq "ARRAY" ? @$fdata : 1;
+
+		@{$this_struct{$fname}} = ($fdata, $fcount, $fcount);
 	}
 	return  \%this_struct;
 }
@@ -1274,14 +1320,15 @@ sub struct_write
 		{
 			($fdata, $fdatacount, $ftotalcount) = @{$structref->{$fname}};
 		}
-		elsif($ftype ne "EVAL" and defined($fvalue))
-		{
-			($fvalue) = struct_expression($struct_fields{$type}, $structref, $fvalue, $parent_structs);
-			#print STDERR "filled in value $type $fname: $fvalue\n";
-			$fdata = &{$primative_fromstring{$ftype}}($fvalue, 1);
-			$fdatacount = $ftotalcount = 1;
-			@{$structref->{$fname}} = ($fdata, $fdatacount, $ftotalcount);
-		}
+# done in read
+#		elsif($ftype ne "EVAL" and defined($fvalue))
+#		{
+#			($fvalue) = struct_expression($struct_fields{$type}, $structref, $fvalue, $parent_structs);
+#			#print STDERR "filled in value $type $fname: $fvalue\n";
+#			$fdata = &{$primative_fromstring{$ftype}}($fvalue, 1);
+#			$fdatacount = $ftotalcount = 1;
+#			@{$structref->{$fname}} = ($fdata, $fdatacount, $ftotalcount);
+#		}
 
 		if($ftype eq "EVAL")
 		{
