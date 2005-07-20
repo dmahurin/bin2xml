@@ -106,7 +106,7 @@ SHAPE_RECORD:
 :
 
 SHAPE_RECORD_DATA_SETUP:
-	UB[5] type
+	UB[5] type = (has_new_styles && 0x10) | (has_line_style && 0x8) | (has_fill_style1 && 0x4) | (has_fill_style0 && 0x2) | (has_move_to && 0x1)
 	EVAL ARRAY_LAST = type == 0 and "SHAPE_RECORD"
 	EVAL has_new_styles = type & 0x10 && 1
 	EVAL has_line_style = type & 0x8 && 1
@@ -247,7 +247,30 @@ ACTION_TYPE=
 	0x07 STOP
 	0x08 TOGGLE_QUALITY
 	0x09 STOP_SOUNDS
+	0x0a ADD
+	0x0b SUBTRACT
+	0x0c MULTIPLY
+	0x0d DIVIDE
+	0x0e EQUAL
+	0x0f LESS_THAN
+	0x10 LOGICAL_AND
+	0x11 LOGICAL_OR
+	0x12 LOGICAL_NOT
+	0x13 STRING_EQUAL
+	0x14 STRING_LENGTH
+	0x15 SUB_STRING
+	0x23 SET_PROPERTY
+	0x3c SET_LOCAL_VARIABLE
 	0x3d CALL_FUNCTION
+	0x43 DECLARE_TARGET
+	0x45 GET_TARGET
+	0x46 ENUMERATE
+	0x47 ADD_TYPED
+	0x48 LESS_THAN_TYPED
+	0x49 EQUAL_TYPED
+	0x4a TO_NUMBER
+	0x4b TO_STRING
+	0x4c DUPLICATE
 	0x81 GOTO_FRAME
 	0x83 GET_URL
 	0x88 DECLARE_DICTIONARY
@@ -345,9 +368,24 @@ ACTION_GET_URL:
 	CSTRING target
 :
 
+ACTION_DECLARE_DICTIONARY:
+	UI16 length
+	UI16 count
+	CSTRING[count] dictionary
+:
+
+ACTION_DECLARE_FUNCTION:
+	UI16 length
+	CSTRING name
+	UI16 arg_count
+	CSTRING[arg_count] arg_name
+	UI16 function_length
+	EVAL DATA_END = function_length
+	ACTIONRECORD[] action_records
+:
 
 ACTION_*:
-	UI16[long_action] length
+	UI16 length
 	HEXDATA[length] data
 :
 
@@ -357,7 +395,7 @@ ACTIONRECORD:
 	#EVAL long_action = action_number & 0x80 && 1
 	UI8 <ACTION_TYPE> action_type
 	EVAL long_action = action_type & 0x80 && 1
-	ACTION_{action_type} action
+	ACTION_{action_type}[long_action] action
 :
 
 TAG_DATA_DOACTION:
@@ -439,12 +477,12 @@ TAG_DATA_END:
 :
 
 TAGGED_BLOCK:
-	UI16 tag_id_len = tag_id << 6 | short_len
-	EVAL <TAGID> tag_id = tag_id_len >> 6
-	EVAL short_len = tag_id_len & 0x3f
-	EVAL long_len_size = int(short_len == 0x3f)
-	UI32[long_len_size] long_len
-	EVAL length = long_len or short_len
+	UI16 _tag_id_len = tag_id << 6 | (have_long_len ? 0x3f : length)
+	EVAL <TAGID> tag_id = _tag_id_len >> 6
+	EVAL _short_len = _tag_id_len & 0x3f
+	EVAL have_long_len = int(_short_len == 0x3f)
+	UI32[have_long_len] _long_len = have_long_len ? length : undef
+	EVAL length = _long_len or _short_len
 	EVAL DATA_END = length
 	TAG_DATA_{tag_id} data
 :
