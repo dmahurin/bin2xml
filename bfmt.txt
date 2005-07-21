@@ -17,10 +17,10 @@ termination.
 specification.
 
 MAIN:
-	INT8 byte1
-	INT16 short1
-	INT24 x1
-	INT32 int1
+	UI8 byte1
+	UI16 short1
+	UI24 x1
+	UI32 int1
 	CHAR char1
 	MYDATA data1
 :
@@ -32,15 +32,14 @@ data type name. If ommited, count is assumed to be one.
 
 MYDATA:
 	CHAR[12] name 
-	INTBITS[2] ready
-	INTBITS[6] go
-	INT32[4] data
+	UB[2] ready
+	UB[6] go
+	UI32[4] data
 :
 
 Note that bit order for bytes is assumed to be 
 most significant bit first.
 Integers types are unsigned and most significant byte first.
-("RINT" may be defined in the future for reverse byte integers.)
 
 Special types are defined to skip bits and bytes:
 
@@ -53,7 +52,7 @@ MYDATA:
 	OFFSET_START
 	CHAR name[8]
 	SKIPBITS[2]
-	INTBITS[6]
+	UI[6]
 	[15] INT32[2] lasttwo
 :
 
@@ -75,7 +74,7 @@ DAY=
 The conversion is used with <>'s in a field definition.
 
 MYDATE:
-	INT16 <MONTH> month
+	UI16 <MONTH> month
 	CHAR[1] <DAY> day
 :
 
@@ -91,20 +90,20 @@ are found at the location(s) specified by the offset.
 
 OFFSET_TYPES:
 	OFFSET_START
-	MYDATE@INT16 mydate@date_offset
-	MYDATE[2]@INT16 start_end_dates@start_end_dates_offset
-	MYDATE@INT16[20] holiday_dates@holidays_dates_offset
-	MYDATE[10]@INT16[10] employee_days_off@employee_dayes_off_offset
+	MYDATE@UI16 mydate@date_offset
+	MYDATE[2]@UI16 start_end_dates@start_end_dates_offset
+	MYDATE@UI16[20] holiday_dates@holidays_dates_offset
+	MYDATE[10]@UI16[10] employee_days_off@employee_dayes_off_offset
 :
 
 All array counts and offsets can be specified as an expression
 that references other struct variables.
 
 EMP_DATA:
-	INT16 offset_shorts_from_parent_start
+	UI16 offset_shorts_from_parent_start
 	
-	[offset_from_parent_start/2] INT16 num_employees
-	INT max_days_off
+	[offset_from_parent_start/2] UI16 num_employees
+	UI16 max_days_off
 	MYDATE[max_days_off]@INT16[num_employees] employee_days_off@employee_dayes_off_offset
 :
 
@@ -112,8 +111,8 @@ Struct and Translations can be derived from previous definitions.
 A {var} definition will be replaced with the value of "var".
 
 DONS_CMD_SPEC:
-	INT8 cmd
-	INT8[3] args
+	UI8 cmd
+	UI8[3] args
 :
 
 COMMAND:
