@@ -674,7 +674,7 @@ print "xml to raw\n";
 open(INFILE, $infile);
 open(OUTFILE, ">$outfile");
 my $mainref = struct_read_xml("MAIN");
-#struct_write_xml("MAIN", $mainref); 
+#struct_write_xml("MAIN", "", $mainref); 
 struct_write("MAIN", $mainref); 
 close(INFILE);
 if(defined($translations{""}->{"SECTOR_SIZE"}))
@@ -693,7 +693,7 @@ print "raw to xml\n";
 open(INFILE, $infile);
 open(OUTFILE, ">$outfile");
 my $mainref = struct_read("MAIN");
-struct_write_xml("MAIN", $mainref); 
+struct_write_xml("MAIN", "", $mainref); 
 close(INFILE);
 close(OUTFILE);
 }
@@ -1129,7 +1129,7 @@ sub struct_read_xml
 #TODO check is struct_fields{type} correct
 	}
 
-	return \%this_struct if($singletag);
+	#return \%this_struct if($singletag);
 	
 
 #	for my $name ( keys %{$struct_fields{$type}} )
@@ -1143,7 +1143,7 @@ sub struct_read_xml
 	}
 	
 	local $/ = '>';
-	while(defined(my $tag = <INFILE>))
+	while((!$singletag) and defined(my $tag = <INFILE>))
 	{
 		last unless ($tag =~ m:\S:m);
 		unless($tag =~ m:^\s*\<\s*([^\>\s]+)([^\>]+)*\>$:m)
@@ -1580,15 +1580,29 @@ sub get_primative_param_string
 		
 sub struct_write_xml
 {
-	my($type, $structref, $indent) = @_;
+	my($type, $name, $structref, $indent) = @_;
+	my $tag_params = $minimal_xml ? get_primative_param_string($type, $structref) : "";
+	$tag_params = " " . $tag_params unless($tag_params eq '');
+
 	$indent = "" unless(defined($indent));
+	my $indent0 = $indent;
 
 	unless(defined($structs{$type}))
 	{
 		print STDERR "unknown struct: $type\n";
 		return;
 	}
+
 	return unless (%$structref);
+
+	unless( $type eq "MAIN")
+	{
+		print OUTFILE "$indent0<$name$tag_params" unless $type eq "MAIN";
+		$indent .= "\t";
+	}
+
+
+	my $count = 0;
 
 	for my $name_fields (@{$structs{$type}})
 	{
@@ -1599,18 +1613,30 @@ sub struct_write_xml
 		next if($ftype eq "OFFSET_START");
                 next unless(defined($structref->{$fname}));
 		my($fdata, $fdatacount) = @{$structref->{$fname}};
+		next unless($fdatacount);
 		next unless(data_has_value($fdata));
 		print "xml out $fname, $ftype, $fcount\n" if($debug);
 		print "fdata out value : ", fdata_value($fdata) , "\n" if($debug);
+
+		if (!defined($primative_tostring{$ftype}) and $ftype ne "EVAL")
+		{
+			next unless(@$fdata > 1 or @$fdata == 1 and %{$fdata->[0]});
+		}
+		elsif($minimal_xml and (! defined($fptype)) and $type ne "MAIN")
+		{
+			next;
+		}
+
+		#next if ($minimal_xml and (! defined($fptype)) and $type ne "MAIN" and (defined($primative_tostring{$ftype}) or $ftype eq "EVAL"));
+
+		print OUTFILE ">\n" unless($count or $type eq "MAIN");
+
+		$count++;
 		   if(!defined($primative_tostring{$ftype}) and $ftype ne "EVAL")
 		   {
 			   for my $substructref (@{$fdata})
 			   {
-				my $tag_params = $minimal_xml ? get_primative_param_string($ftype, $substructref) : "";
-				$tag_params = " " . $tag_params unless($tag_params eq '');
-				   print OUTFILE "$indent<$fname$tag_params>\n";
-				   struct_write_xml($ftype, $substructref, $indent . "\t");
-				   print OUTFILE "$indent</$fname>\n";
+				   struct_write_xml($ftype, $fname, $substructref, $indent);
 			   }
 		   }
 		elsif($type eq "MAIN" || !$minimal_xml)
@@ -1653,14 +1679,11 @@ sub struct_write_xml
 		   {
 			   for my $substructref (@{$fpdata})
 			   {
-				my $tag_params = $minimal_xml ? get_primative_param_string($fptype, $substructref) : "";
-				$tag_params = " " . $tag_params unless($tag_params eq '');
-				   print OUTFILE "$indent<$fpname$tag_params>\n";
-				   struct_write_xml($fptype, $substructref, $indent . "\t");
-				   print OUTFILE "$indent</$fpname>\n";
+				   struct_write_xml($fptype, $fpname, $substructref, $indent);
 			   }
 		   }
 	   }
+	print OUTFILE $count ? "$indent0</$name>\n" : "/>\n" unless $type eq "MAIN";
 }
 
 sub struct_size
