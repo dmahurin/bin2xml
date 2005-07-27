@@ -180,6 +180,9 @@ TAG_DATA_DEFINESHAPE:
 	SHAPE_WITH_STYLE shapes_with_style
 :
 
+TAG_DATA_SHOWFRAME:
+:
+
 TAG_DATA_*:
 	HEXDATA[] data
 :
