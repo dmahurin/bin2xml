@@ -1,5 +1,5 @@
 =
-        BYTE_ORDER vax_except_bits
+        BYTE_ORDER vax_swf
 =
 
 MAIN:
@@ -11,7 +11,7 @@ BODY_FWS:
 	UI8 version // ( 0x04 for SWF 4)
 	UI32 file_length
 	RECT frame_size
-	UI16 frame_rate
+	UF16 frame_rate
 	UI16 frame_count
 	TAGGED_BLOCK[] tagblock
 :
@@ -206,16 +206,17 @@ PUSH_DATA_REGISTER:
 :
 
 PUSH_DATA_BOOL:
-	UI8 n
+	UI8 value
 :
 
 PUSH_DATA_INTEGER:
-	UI32 n
+	UI32 value
 :
 
 PUSH_DATA_DOUBLE:
-	UI32 n1
-	UI32 n2
+#	UI32 n1
+#	UI32 n2
+	F64 value
 :
 
 PUSH_DATA_REFERENCE:
