@@ -13,6 +13,8 @@ use POSIX;
 my $ui32_pack = 'N';
 my $uib32_pack = 'N';
 my $ui16_pack = 'n';
+my $reverse_float_bytes = 0;
+my $reverse_double_ints = 0;
 
 my $bitbufin = '';
 my $bitbufout = '';
@@ -24,6 +26,81 @@ my %reverse_translations;
 
 my $minimal_xml = 1;
 
+my $reverse_byte_native_floats;
+{
+	my $n125 = unpack('N', pack("f", -1.25));
+	if($n125 == 0xa0bf) { $reverse_byte_native_floats = 1; }
+	elsif($n125 == 0xbfa00000) { $reverse_byte_native_floats = 0; }
+	else
+	{
+		printf STDERR "unknown native float format: -1.25 == 0x%x\n", $n125;
+	}
+}
+
+sub reverse_bytes
+{
+	my($buf, $numsize) = @_;
+	my(@bytes) = split(//, $buf);
+	my $out = '';
+	my $i = 0;
+	unless(@bytes % $numsize == 0)
+	{
+		print STDERR "internal misalignment error $numsize\n";
+		return undef;
+	}
+	while(@bytes)
+	{
+		$out .= reverse(splice(@bytes, 0, $numsize));
+	}
+	return $out;
+}
+
+sub reverse_byte_parts
+{
+	my($buf, $partsize, $unitsize) = @_;
+	my(@parts);
+	while($buf ne '')
+	{
+		push(@parts, substr($buf, 0, $partsize, ''));
+	}
+	while(@bytes)
+	{
+		$out .= reverse(splice(@parts, 0, $unitsize));
+	}
+	return $out;
+}
+
+sub pack_float
+{
+	my(@nums) = @_;
+	my $buf = pack('f*', @nums);
+	return $reverse_byte_native_floats != $reverse_float_bytes ? reverse_bytes($buf, 4) : $buf;
+}
+
+sub pack_double
+{
+	my(@nums) = @_;
+	my $buf = pack('d*', @nums);
+	$buf = $reverse_byte_native_floats != $reverse_float_bytes ? reverse_bytes($buf, 8) : $buf;
+	if($reverse_double_ints)
+	{ $buf = reverse_parts($buf, 4, 2); }
+	return $buf;
+}
+
+sub unpack_float
+{
+	my($buf) = @_;
+	if($reverse_byte_native_floats != $reverse_float_bytes) { $buf = reverse_bytes($buf, 4); }
+	return unpack('f*', $buf);
+}
+
+sub unpack_double
+{
+	my($buf) = @_;
+	if($reverse_byte_floats != $f32_reverse_bytes) { $buf = reverse_bytes($buf, 8); }
+	if($reverse_double_ints) { $buf = reverse_parts($buf, 4, 2); }
+	return unpack('d*', $buf);
+}
 
 sub read_bits
 {
@@ -147,8 +224,11 @@ $primative_sizebits{"SB"} =
 $primative_sizebits{"SKIPBITS"} = 1;
 
 $primative_sizebits{"UI16"} = 16;
+$primative_sizebits{"UF16"} = 16;
 $primative_sizebits{"INT24"} = 24;
 $primative_sizebits{"UI32"} = 32;
+$primative_sizebits{"F32"} = 32;
+$primative_sizebits{"F64"} = 64;
 
 $primative_read{"CSTRING"} =
 sub
@@ -315,6 +395,38 @@ sub
 	return undef;
 };
 
+$primative_fromraw{"F64"} =
+sub
+{
+	my($bufref) = @_;
+	my(@bufout) = unpack_double($$bufref);
+	return \@bufout;
+};
+
+$primative_toraw{"F64"} =
+sub
+{
+	my($bufref) = @_;
+	my($bufout) = pack_double(@$bufref);
+	return \$bufout;
+};
+
+$primative_fromraw{"F32"} =
+sub
+{
+	my($bufref) = @_;
+	my(@bufout) = unpack_float($$bufref);
+	return \@bufout;
+};
+
+$primative_toraw{"F32"} =
+sub
+{
+	my($bufref) = @_;
+	my($bufout) = pack_float(@$bufref);
+	return \$bufout;
+};
+
 $primative_fromraw{"UI32"} =
 sub
 {
@@ -336,6 +448,49 @@ sub
 {
    my($bufref) = @_;
    my($bufout) = pack('C*', @$bufref);
+   return \$bufout;
+};
+
+sub ui16tofixed
+{
+	my(@values) = @_;
+	my(@out) = ();
+	for my $value (@values)
+	{
+		my($v1) = $value >> 8;
+		my($v2) = $value & 0xff;
+		push(@out, $v1 + $v2/0x100);
+	}
+	return @out;
+}
+
+sub fixedtoui16
+{
+	my(@values) = @_;
+	my(@out) = ();
+	for my $value (@values)
+	{
+		my($v1) = int($value);
+		my($v2) = int(($value - $v1) * 0x100);
+		push(@out, ($v1 << 8) | $v2);
+	}
+	return @out;
+}
+	
+
+$primative_fromraw{"UF16"} =
+sub
+{
+	my($bufref) = @_;
+	my(@bufout) = ui16tofixed(unpack("${ui16_pack}*", $$bufref));
+	return \@bufout;
+};
+
+$primative_toraw{"UF16"} =
+sub
+{
+   my($bufref) = @_;
+   my($bufout) = pack("${ui16_pack}*", fixedtoui16(@$bufref));
    return \$bufout;
 };
 
@@ -563,9 +718,12 @@ sub
 };
 
 $primative_tostring{"UI8"} =
+$primative_tostring{"UF16"} = 
 $primative_tostring{"UI16"} = 
 $primative_tostring{"INT24"} = 
 $primative_tostring{"UI32"} =
+$primative_tostring{"F32"} = 
+$primative_tostring{"F64"} = 
 $primative_tostring{"UB"} =
 $primative_tostring{"SB"} =
 $primative_tostring{"CSTRING"} =
@@ -577,8 +735,11 @@ sub
 
 $primative_fromstring{"UI8"} =
 $primative_fromstring{"UI16"} =
+$primative_fromstring{"UF16"} =
 $primative_fromstring{"INT24"} =
 $primative_fromstring{"UI32"} =
+$primative_fromstring{"F32"} = 
+$primative_fromstring{"F64"} = 
 $primative_fromstring{"UB"} =
 $primative_fromstring{"SB"} =
 $primative_fromstring{"CSTRING"} =
@@ -658,12 +819,22 @@ if($translations{""}->{"BYTE_ORDER"} eq 'vax')
 {
 	$ui32_pack = 'V';
 	$ui16_pack = 'v';
+	$f32_reverse_bytes = 1;
 	$uib32_pack = 'V';
+}
+elsif($translations{""}->{"BYTE_ORDER"} eq 'vax_swf')
+{
+	$ui32_pack = 'V';
+	$ui16_pack = 'v';
+	$f32_reverse_bytes = 1;
+	$f32_reverse_ints = 1;
+	$uib32_pack = 'N';
 }
 elsif($translations{""}->{"BYTE_ORDER"} eq 'vax_except_bits')
 {
 	$ui32_pack = 'V';
 	$ui16_pack = 'v';
+	$f32_reverse_bytes = 1;
 	$uib32_pack = 'N';
 }
 
