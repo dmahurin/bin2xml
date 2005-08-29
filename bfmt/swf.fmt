@@ -7,13 +7,19 @@ MAIN:
 	BODY_{signature} body
 :
 
+DATA_SECTION:
+	HEXDATA[] data
+:
+
 BODY_FWS:
 	UI8 version // ( 0x04 for SWF 4)
 	UI32 file_length
+	EVAL DATA_END = file_length + 5
 	RECT frame_size
 	UF16 frame_rate
 	UI16 frame_count
 	TAGGED_BLOCK[] tagblock
+	DATA_SECTION data_section
 :
 
 RECT:
@@ -30,14 +36,58 @@ TAGID=
 	0x02 DEFINESHAPE
 	0x09 SETBACKGROUNDCOLOR
 	0x0c DOACTION
+	0x0e DEFINESOUND
 	0x27 DEFINESPRITE
+	0x2d SOUNDSTREAMHEAD2
 	0x1a PLACEOBJECT2
 	0x01 SHOWFRAME
 	0x1c REMOVEOBJECT2
 	0x22 DEFINEBUTTON2
 	0x2b FRAMELABEL
+	0x38 EXPORT
 =
 
+TAG_DATA_SOUNDSTREAMHEAD2:
+	UB[4] reserved
+	UB[2] playback_rate
+	UB[1] playback_size
+	UB[1] playback_stereo
+	UB[4] compression
+	UB[2] sound_rate
+	UB[1] sound_size
+	UB[1] sound_stereo
+	UI16 sample_size
+	UI16[compression == 2] latency_seek
+:
+
+EXTERNAL_SYMBOL:
+	UI16 id
+	CSTRING symbol_name
+:
+
+TAG_DATA_EXPORT:
+	UI16 count
+	EXTERNAL_SYMBOL[count] symbol
+:
+
+SOUND_FORMAT=
+	0 RAW
+	1 ADPCM
+	2 MP3
+	3 UNCOMPRESSED
+	6 NELLYMOSER
+=
+
+TAG_DATA_DEFINESOUND:
+	UI16 sound_id
+	UB[4] <SOUND_FORMAT> sound_format
+	UB[2] sound_rate
+	UB[1] sound_is_16bits
+	EVAL sample_size = sound_is_16bits ? 2 : 1
+	UB[1] sound_is_stereo
+	UI32 sample_count
+	HEXDATA[] sound_data
+:
 
 TAG_DATA_SETBACKGROUNDCOLOR:
 	RGB color
