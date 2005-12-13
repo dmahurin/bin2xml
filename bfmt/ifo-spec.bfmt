@@ -138,15 +138,94 @@ YUVCOLORB32:
 //	UI32 status
 //:
 
+COMMAND_TYPE=
+	0 Basic
+	1 Branch
+	2 SetSystem
+	3 Set
+	4 SetCLnk
+	5 CSetCLnk
+	6 CmpSetLnk
+=
+
 COMMAND:
-	UI8 command_type
+	UB[3] command_type
+	COMMAND_{command_type} command
+:
+
+COMMAND_0:
+	UB[1] direct
+	UB[4] set
 	UB[1] dir_cmp
-	UB[3] <CMP> cmp
-	UB[4] <CMD_TYPE_{command_type}> cmd
+	UB[3] cmp
+	UB[4] <CMD_0> cmd
+	UI16[3] args
+:
+COMMAND_1:
+	UB[1] direct
+	UB[4] set
+	UB[1] dir_cmp
+	UB[3] cmp
+	UB[4] <CMD_1_{direct}> cmd
+	UI16[3] args
+	//HEXDATA[6] args
+:
+
+COMMAND_2:
+	UB[1] direct
+	UB[4] set
+	UB[1] dir_cmp
+	UB[3] cmp
+	UB[4] <CMD_2> cmd
 	UI16[3] args
 :
 
-CMP=
+COMMAND_3:
+	UB[1] direct
+	UB[4] set
+	UB[1] dir_cmp
+	UB[3] cmp
+	UB[4] cmd
+	UI16[3] args
+:
+
+COMMAND_4:
+	UB[1] set_flag
+	UB[4] <SETOP> set
+	UB[1] cmp_flag
+	UB[3] <CMPOP> cmp
+	UB[4] scr
+	UI16[3] args
+:
+
+COMMAND_5:
+	UB[1] set_flag
+	UB[4] <SETOP> set
+	UB[1] cmp_flag
+	UB[3] <CMPOP> cmp
+	UB[4] scr
+	UI16[3] args
+:
+
+COMMAND_6:
+	UB[1] set_flag
+	UB[4] <SETOP> set
+	UB[1] cmp_flag
+	UB[3] <CMPOP> cmp
+	UB[4] scr
+	UI16[3] args
+:
+
+COMMAND_7:
+	UB[1] set_flag
+	UB[4] set
+	UB[1] cmp_flag
+	UB[3] cmp
+	UB[4] scr
+	UI16[3] args
+:
+
+SETOP=
 	0 none
 	1 mov
 	2 swp
@@ -161,21 +240,52 @@ CMP=
 	11 xor
 =
 
-CMD_TYPE_0=
+CMDOP=
+	0 none
+	1 BC
+	2 EQ
+	3 NE
+	4 GE
+	5 GT
+	6 LE
+	7 LT
+=
+
+CMD_0=
 	0 nop
 	1 goto
 	2 break
 	3 SetTmpPML
 =
 
-CMD_TYPE_48=
-	0	NOP
-	1	Exit
-	2	JumpTT
-	3	JumpVTS_TT
-	5	JumpVTS_PTT
-	6	JumpSS
-	8	CallSS
+CMD_1_0=
+	0 nop
+	1 LinkSubset
+	2 xxx
+	4 LinkPGCN
+	5 LinkPTTN
+	6 LinkPGN
+	7 LinkCN
+=
+
+CMD_1_1=
+	0 nop
+	1 Exit
+	2 JumpTT
+	3 JumpVTS_TT
+	5 JumpVTS_PTT
+	6 JumpSS
+	8 CallSS
+=
+
+CMD_2=
+	0 nop
+	1 SetSTN
+	2 SetNVTMR
+	3 SetGPRMMD
+	4 SetAMXMD
+	5 SetAMXMD
+	6 SetHL_BTNN
 =
 
 PGC_COMMAND_TABLE:
@@ -219,13 +329,29 @@ CELL_CATEGORY:
 	UI8 restricted
 :
 
+FPSN=
+	0 -1
+	1 25
+	2 -2
+	3 30
+=
+
+BCD_TIME:
+	HEXDATA[1] hour
+	HEXDATA[1] minute
+	HEXDATA[1] second
+	UB[2] <FPSN> fps
+	HEXBITS[6] frame
+:
+
 CELL_PLAYBACK_IT:
  	CELL_CATEGORY category
-        UI8 still_time // seconds, 0xff = Inf.
-        UI8 command_num // 0 = no command
-        HEXDATA[3] playback_time
-	UB[2] frame_type
-        UB[6] frame
+	UI8 still_time // seconds, 0xff = Inf.
+	UI8 command_num // 0 = no command
+	BCD_TIME playback_time
+//	HEXDATA[3] playback_time
+//	UB[2] frame_type
+//	UB[6] frame
         UI32 entry_point_sector
         UI32 first_ilvu_vobu_end_sector
         UI32 last_vobu_start_sector
@@ -253,15 +379,44 @@ SUBPICTURE_STREAM_STATUS:
  	HEXDATA[3] unknown // non-zero in matrix ifo 2
 :
 
+UOP=
+	0 TIME_PLAY
+	1 PTT_PLAY
+	2 TITLE_PLAY
+	3 STOP
+	4 GO_UP
+	5 TIME_PTT_SEARCH
+	6 PREV_PG
+	7 NEXT_PG
+	8 FORWARD
+	9 BACKWARD
+	10 MENU_TITLE
+	11 MENU_ROOT
+	12 MENU_SUBPICTURE
+	13 MENU_AUDIO
+	14 MENU_ANGLE
+	15 MENU_PTT
+	16 RESUME
+	17 ACTIVATE
+	18 STILL_OFF
+	19 PAUSE
+	20 AUDIO_STREAM_CHANGE
+	21 SUBPICTURE_STREAM_CHANGE
+	22 ANGLE_CHANGE
+	23 KARAOKE_MIX_CHANGE
+	24 PRESENTATION_MODE_CHANGE
+=
+
 PGC:
 	EVAL OFFSET_START
 	UI16  unknown1 // -- end byte ?
 	UI8 num_programs
 	UI8 num_cells
-	HEXDATA[3]   playback_time
-	UB[2] frame_type
-        UB[6] frame
-	BITVECTOR[32] prohibited_user_operations
+	BCD_TIME playback_time
+//	HEXDATA[3]   playback_time
+//	UB[2] frame_type
+//	UB[6] frame
+	BITVECTOR[32] <UOP> prohibited_user_operations
 	AUDIO_STREAM_STATUS[8]  audio_stream_status
 	SUBPICTURE_STREAM_STATUS[32] sub_picture_stream_status
 	UI16 next_pgc_number
@@ -323,7 +478,7 @@ PTT_SRPT:
 	//HEXDATA[end_byte+1 - ptt_offsets - 4] junk // ending non-zeros?
 //	PTT[(int(end_byte+1 - ptt_offsets - 4)/4)] extra_ptt // ending non-zeros?
 	UI32[num_titles] ptt_offsets
-	PTT[(int(end_byte+1 - 4)/4)] ptt
+	PTT[(int(end_byte+1 - 8 )/4) - num_titles] ptt
 :
 
 MEDIA_ATTRIBUTES1:
@@ -439,9 +594,10 @@ C_ADT:
 	UI16 num_cells
 	UI16 reserved
 	UI32 end_address
-	C_ADT_CELL[num_cells] cells
+	//C_ADT_CELL[num_cells] cells
 	//HEXDATA[end_address - 7 - 12 * num_cells] junk // non-zero ?
-	C_ADT_CELL[int((end_address - 7 - 12 * num_cells)/12)] extra_cells // non-zero ?
+	//C_ADT_CELL[int((end_address - 7 - 12 * num_cells)/12)] extra_cells // non-zero ?
+	C_ADT_CELL[int((end_address - 7 )/12)] cells // non-zero ?
 :
 
 VOBU_ADMAP:
