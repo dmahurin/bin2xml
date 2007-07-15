@@ -39,7 +39,7 @@ VIDEO_ATTRIBUTES:
 
 	UB[1] cc1
 	UB[1] cc2
-	UB[1] unknown
+	UB[1] unknown1
 	UB[1] <VIDEO_BITRATE> bit_rate
 	UB[2] resolution
 	UB[1] letterboxed
@@ -48,9 +48,9 @@ VIDEO_ATTRIBUTES:
 
 AUDIO_ATTRIBUTES:
 	UB[3] coding
-	UB[1] multi_ext
+	UB[1] multichannel_extension_present
 	UB[2] lang_type
-	UB[2] app_mode
+	UB[2] application_mode
 
 	UB[2] quantization
 	UB[2] sample_rate
@@ -58,8 +58,8 @@ AUDIO_ATTRIBUTES:
 	UB[3] channels
 
 	CHAR[2] lang_code
-	UI16 lang_ext
-	UI8 unknown
+	UI16 lang_extension
+	UI8 code_extension
 	UI8 app_info
 :
 
@@ -68,8 +68,8 @@ SUB_PICTURE_STREAM_ATTRIBUTES:
 	SKIPBYTE zero1
 	//CHAR[2] lang_code // code sometimes is all FF's
 	UI8[2] lang_code
-	UI8 lang_ext
-	SKIPBYTE zero2
+	UI8 lang_extension
+	UI8 code_extension
 :
 
 PCG_MENU_TYPE=
@@ -88,9 +88,9 @@ PCG_MENU_TYPE=
 PGCI_SRP:
 	UB[1] entry_pgc // title menu ?
 	UB[3] reserved
-        UB[4]	<PCG_MENU_TYPE> pgc_category_menu_type
+	UB[4]	<PCG_MENU_TYPE> pgc_category_menu_type
 	UI8[1] category
-        UI16 pgc_category_parental_id_mask
+	UI16 pgc_category_parental_id_mask
 	PGC@UI32 pgci@pgci_start_byte
 :
 
@@ -107,8 +107,8 @@ LU_EA:
 //VTSM_PGCI_UT
 // pointer offsets reference parent UT struct
 PGCI_LU:
-	CHAR[2] language_code // (ISO-639)
-        UI8 language_ext
+	CHAR[2] lang_code // (ISO-639)
+	UI8 lang_extension
 	UI8 existence_mask // (VMGM Ayyy yyyy, A == Title menu(2))
 	LU_EA@UI32 lu_ea@language_start_byte
 	//UI32 language_start_byte
@@ -130,11 +130,11 @@ YUVCOLORB32:
 	UI8     V
 :
 
-//AUDIO_STREAM_STATUS:
+//AUDIO_STREAM_MAPPING:
 //	UI16 status
 //:
 
-//SUB_PICTURE_STREAM_STATUS:
+//SUB_PICTURE_STREAM_MAPPING:
 //	UI32 status
 //:
 
@@ -352,31 +352,38 @@ CELL_PLAYBACK_IT:
 //	HEXDATA[3] playback_time
 //	UB[2] frame_type
 //	UB[6] frame
-        UI32 entry_point_sector
-        UI32 first_ilvu_vobu_end_sector
-        UI32 last_vobu_start_sector
-        UI32 this_cell_last_sector
+	UI32 entry_point_sector
+	UI32 first_ilvu_vobu_end_sector
+	UI32 last_vobu_start_sector
+	UI32 this_cell_last_sector
 :
 
 CELL_POSITION_IT:
 	UI16          vob_id
-        UI8           unknown
+	SKIPBYTE      zero1
 	UI8           cell_id
 :
 
-AUDIO_STREAM_STATUS:
-	UB[1] available
-	SKIPBITS[4] reserved
-	UB[3] stream_number
-	SKIPBYTE reserved2
+AUDIO_STREAM_MAPPING:
+	UB[1] present
+	SKIPBITS[4] zero1
+	UB[3] s_audio
+	SKIPBYTE zero2
 :
 
-SUBPICTURE_STREAM_STATUS:
-	UB[1] available
-	SKIPBITS[2] reserved
-	UB[5] stream_number
-	//SKIPBYTE[3] reserved2
- 	HEXDATA[3] unknown // non-zero in matrix ifo 2
+SUBPICTURE_STREAM_MAPPING:
+	UB[1] present
+	SKIPBITS[2] zero1
+	UB[5] s_4p3
+
+	SKIPBITS[3] zero2
+	UB[5] s_wide
+
+	SKIPBITS[3] zero3
+	UB[5] s_lbox
+
+	SKIPBITS[3] zero4
+	UB[5] s_panscan
 :
 
 UOP=
@@ -417,13 +424,13 @@ PGC:
 //	UB[2] frame_type
 //	UB[6] frame
 	BITVECTOR[32] <UOP> prohibited_user_operations
-	AUDIO_STREAM_STATUS[8]  audio_stream_status
-	SUBPICTURE_STREAM_STATUS[32] sub_picture_stream_status
+	AUDIO_STREAM_MAPPING[8]  audio_stream_status
+	SUBPICTURE_STREAM_MAPPING[32] sub_picture_stream_status
 	UI16 next_pgc_number
-        UI16 previous_pgc_number
-        UI16 go_up_pgc_number
-        UI8  still_time //in seconds
-        UI8  pg_playback_mode
+	UI16 previous_pgc_number
+	UI16 go_up_pgc_number
+	UI8  still_time //in seconds
+	UI8  pg_playback_mode
 	YUVCOLORB32[16] pallete
 	PGC_COMMAND_TABLE@UI16 pgc_command_table@pgc_command_table_start_byte
 	PGC_PROGRAM_MAP[num_programs]@UI16 pgc_program_map@pgc_program_map_start_byte
@@ -492,26 +499,35 @@ MEDIA_ATTRIBUTES1:
 	SUB_PICTURE_STREAM_ATTRIBUTES[1,num_sub_picture_streams] sub_picure_stream_attributes
 :
 
-KARAOKE_EXTENSION:
+MULTICHANNEL_EXTENSION_DEFAULT:
+	SKIPBYTE[18] zero1
+:
+
+MULTICHANNEL_EXTENSION_KARAOKE:
 	UB[7] reserved0
 	UB[1] ach0_guide_melody_exists
+
 	UB[7] reserved1
 	UB[1] ach1_guide_melody_exists
+
 	UB[4] reserved2
 	UB[1] ach2_guide_vocal1_exists
 	UB[1] ach2_guide_vocal2_exists
 	UB[1] ach2_guide_melody1_exists
 	UB[1] ach2_guide_melody2_exists
+
 	UB[4] reserved3
 	UB[1] ach3_guide_vocal1_exists
 	UB[1] ach3_guide_vocal2_exists
 	UB[1] ach3_guide_melody1_exists
 	UB[1] ach3_guide_melody2_exists
+
 	UB[4] reserved4
 	UB[1] ach4_guide_vocal1_exists
 	UB[1] ach4_guide_vocal2_exists
 	UB[1] ach4_guide_melody1_exists
 	UB[1] ach4_guide_melody2_exists
+
 	SKIPBYTE[13] unknown
 :
 
@@ -524,16 +540,15 @@ MEDIA_ATTRIBUTES2:
          
 	UI16 num_sub_picture_streams
 	SUB_PICTURE_STREAM_ATTRIBUTES[32,num_sub_picture_streams] sub_picure_stream_attributes
-	KARAOKE_EXTENSION multichannel_extenstion
-//	HEXDATA[18] ext
 :
 
 VTS_ATR:
 	UI32 end_byte
-	UI32 vts_cat_app_type
+	UI32 <VTS_CATEGORY> vts_category
 	MEDIA_ATTRIBUTES1 vtsm_vobs_media_attributes
 	SKIPBYTE[164]
 	MEDIA_ATTRIBUTES2 vtstt_vobs_media_attributes
+	MULTICHANNEL_EXTENSION_{vts_category} multichannel_extension
 :
 
 # Video Title Set Attribute Table
@@ -578,8 +593,8 @@ IFO_VERSION:
 :
 
 VTS_CATEGORY=
-	0 normal
-	1 karaoke
+	0 DEFAULT
+	1 KARAOKE
 =
 
 C_ADT_CELL:
@@ -607,39 +622,40 @@ VOBU_ADMAP:
 :
 
 VTSI:
-        UI32 vts_last_sector
-        SKIPBYTE[12] zero_1
-        UI32 ifo_last_sector
+	UI32 vts_last_sector
+	SKIPBYTE[12] zero_1
+	UI32 ifo_last_sector
 	IFO_VERSION version
-        UI32 <VTS_CATEGORY> category
-        UI16 vmg_num_volumes
-        UI16 vmg_this_volume_num
-        UI8 disc_side // side ID
-        SKIPBYTE[19] zero_3
-        UI8[2] vmg_num_title_sets
-        CHAR[32] provider_identifier
-        UI8[8] vmg_pos_code // is this 64 bits?
-        SKIPBYTE[24] zero_4 //    --
-        UI32 mat_last_byte
-        UI32 fp_pgc_start_byte // First Play PGC start byte (FP_PGC)
-        SKIPBYTE[56] zero_5
+	UI32 <VTS_CATEGORY> vts_category
+	UI16 vmg_num_volumes
+	UI16 vmg_this_volume_num
+	UI8 disc_side // side ID
+	SKIPBYTE[19] zero_3
+	UI8[2] vmg_num_title_sets
+	CHAR[32] provider_identifier
+	UI8[8] vmg_pos_code // is this 64 bits?
+	SKIPBYTE[24] zero_4 //    --
+	UI32 mat_last_byte
+	UI32 fp_pgc_start_byte // First Play PGC start byte (FP_PGC)
+	SKIPBYTE[56] zero_5
 
-        UI32 menu_vob_start_sector // Start sector of menu-vob/VMGM_VOBS
-        UI32 title_vob_start_sector   //Start sector of VMG_PTT_SRP([tt_srpt)
-        UI32 vts_ptt_srpt_start_sector
-        UI32 vts_pgcit_start_sector // Title PGC table
-        UI32 vts_pgci_ut_start_sector
-        UI32 vts_tmapti_start_sector
-        UI32 vtsm_c_adt_start_sector
-        UI32 vtsm_vobu_admap_start_sector
-        UI32 vts_c_adt_start_sector
-        UI32 vts_vobu_admap_start_sector
-        // HEXDATA[24] unknown_data1 //  zero_6, but had non-zeros ?? where
+	UI32 menu_vob_start_sector // Start sector of menu-vob/VMGM_VOBS
+	UI32 title_vob_start_sector   //Start sector of VMG_PTT_SRP([tt_srpt)
+	UI32 vts_ptt_srpt_start_sector
+	UI32 vts_pgcit_start_sector // Title PGC table
+	UI32 vts_pgci_ut_start_sector
+	UI32 vts_tmapti_start_sector
+	UI32 vtsm_c_adt_start_sector
+	UI32 vtsm_vobu_admap_start_sector
+	UI32 vts_c_adt_start_sector
+	UI32 vts_vobu_admap_start_sector
+	// HEXDATA[24] unknown_data1 //  zero_6, but had non-zeros ?? where
 	SKIPBYTE[24] unknown_data1
 
 	MEDIA_ATTRIBUTES1 vtsm_vobs_media_attributes
 	SKIPBYTE[164] reserved
 	MEDIA_ATTRIBUTES2 vts_vobs_media_attributes
+	MULTICHANNEL_EXTENSION_{vts_category} multichannel_extension
 
 	[fp_pgc_start_byte] PGC fp_pgc
 
@@ -657,33 +673,33 @@ VMGI:
 	UI32 vmg_last_sector
 	SKIPBYTE[12] zero_1
 	UI32 ifo_last_sector
-        IFO_VERSION version // bcd, 0x10 V1.0]
+	IFO_VERSION version // bcd, 0x10 V1.0]
 	SKIPBYTE category0
-	BITVECTOR[8] prohibited_region_mask
-        SKIPBYTE[2] category2_3
-        UI16 vmg_num_volumes
-        UI16 vmg_this_volume_num
-        UI8 disc_side // side ID
-        SKIPBYTE[19] zero_3
-        UI8[2] vmg_num_title_sets
-        CHAR[32] provider_identifier
-        UI8[8] vmg_pos_code // is this 64 bits?
-        SKIPBYTE[24] zero_4 //    --
-        UI32 vmgi_last_byte // vmgi_mat_last_byte
-        UI32 fp_pgc_start_byte // First Play PGC start byte (FP_PGC)
-        SKIPBYTE[56] zero_5
+	BITVECTOR[8] region_mask
+	SKIPBYTE[2] category2_3
+	UI16 vmg_num_volumes
+	UI16 vmg_this_volume_num
+	UI8 disc_side // side ID
+	SKIPBYTE[19] zero_3
+	UI8[2] vmg_num_title_sets
+	CHAR[32] provider_identifier
+	UI8[8] vmg_pos_code // is this 64 bits?
+	SKIPBYTE[24] zero_4 //    --
+	UI32 vmgi_last_byte // vmgi_mat_last_byte
+	UI32 fp_pgc_start_byte // First Play PGC start byte (FP_PGC)
+	SKIPBYTE[56] zero_5
 
-        UI32 vmgm_vobs_start_sector // Start sector of menu-vob/VMGM_VOBS
-        UI32 vmg_tt_srpt_start_sector   //Start sector of VMG_PTT_SRPT
-        UI32 vmgm_pgci_ut_start_sector
-        UI32 vmg_ptl_mait_start_sector
-        UI32 vmg_vts_atrt_start_sector
-        UI32 vmg_txtdt_mg_start_sector
-        UI32 vmgm_c_adt_start_sector
-        UI32 vmgm_vobu_admap_start_sector
-        SKIPBYTE[32] unknown_data1 //  zero_6, but has non-zeros
+	UI32 vmgm_vobs_start_sector // Start sector of menu-vob/VMGM_VOBS
+	UI32 vmg_tt_srpt_start_sector   //Start sector of VMG_PTT_SRPT
+	UI32 vmgm_pgci_ut_start_sector
+	UI32 vmg_ptl_mait_start_sector
+	UI32 vmg_vts_atrt_start_sector
+	UI32 vmg_txtdt_mg_start_sector
+	UI32 vmgm_c_adt_start_sector
+	UI32 vmgm_vobu_admap_start_sector
+	SKIPBYTE[32] unknown_data1 //  zero_6, but has non-zeros
 
-        MEDIA_ATTRIBUTES1 vmgm_vobs_media_attributes
+	MEDIA_ATTRIBUTES1 vmgm_vobs_media_attributes
 
 	[fp_pgc_start_byte] PGC fp_pgc
 
