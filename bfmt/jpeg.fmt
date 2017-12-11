@@ -1,0 +1,93 @@
+MAIN:
+	HEXDATA[2] SOI
+	SECTION[] sections
+:
+
+SECTION:
+	UI16 <MARKER> marker
+	SECTION_{marker} section
+:
+
+SECTION_APP0:
+	UI16 length
+//	CHAR[5] identifier
+	HEXDATA[length - 2] data
+:
+
+SECTION_APP1:
+	UI16 length
+	HEXDATA[length - 2] data
+:
+
+SECTION_DQT:
+	UI16 length
+//	HEXBITS[4] count
+//	HEXBITS[4] precision
+
+//    Bytes                           n bytes         This gives QT values, n = 64*(precision+1)
+	HEXDATA[length - 2] data
+:
+
+SECTION_DHT:
+	UI16 length
+	HEXDATA[length - 2] data
+:
+
+SECTION_COM:
+	UI16 length
+	HEXDATA[length - 2] data
+:
+
+SECTION_SOF:
+	UI16 length
+	UI8 precision
+	UI16 height
+	UI16 width
+	UI8 ncomponents
+	COMPONENT[ncomponents] components
+:
+
+COMPONENT:
+	UI8 id
+	UI8 sampling_factors
+	UI8 quantization_table_number
+:
+
+SECTION_SOS:
+	UI16 length
+	HEXDATA[length - 2] data
+	HEXDATA[] image_data
+:
+
+SECTION_*:
+	HEXDATA[] unknown
+:
+
+APP0_JFIF:
+	UI16 version
+	UI8 units
+	UI16 xdensity
+	UI16 ydensity
+	UI8 xdensity
+	UI8 ydensity
+	EVAL _data_length = length - 18
+	HEXDATA[_data_length] data
+:
+
+APP0_JFXX:
+	UI8 extension_code
+	EVAL _data_length = length - 10
+	HEXDATA[_data_length] data
+:
+
+MARKER=
+	0xffd8 SOI
+	0xffe0 APP0
+	0xffe1 APP1
+	0xffdb DQT
+	0xffda SOS
+	0xffd9 EOI
+	0xffc0 SOF
+	0xffc4 DHT
+	0xfff3 COM
+=
