@@ -110,9 +110,9 @@ sub read_bits
 	my($buf) = '';
 	my($readsizebits) = $sizebits - length($bitbufin);
 	my($readsize) = POSIX::ceil($readsizebits / 8);
-	read(INFILE, $buf, $readsize)
-		if($readsizebits > 0);
-	return undef unless(defined($buf));
+	if($readsizebits > 0) {
+		return undef unless(defined(read(INFILE, $buf, $readsize)));
+	}
 	if($bitbufin ne '' or $readsizebits % 8)
 	{
 		$bitbufin .= unpack("B*", $buf);
@@ -1004,7 +1004,7 @@ printf ("off: ($ftype) %x %x + %d\n", tell(INFILE), tell(INFILE) - $struct_start
 		{
 			my $buf = read_bits(\*INFILE, $fcount * 
 				$primative_sizebits{$ftype});
-			return \%this_struct unless (defined($buf));
+			return undef unless (defined($buf) and length($buf) > 0);
 
 			$fdata = &{$primative_fromraw{$ftype}}(\$buf, $fcountset);
 
@@ -1029,8 +1029,9 @@ printf ("off: ($ftype) %x %x + %d\n", tell(INFILE), tell(INFILE) - $struct_start
 			push(@$parent_structs, \%this_struct);
 			for ($i = 0 ; $fcountset < 0 || $i < $fcountset; $i++)
 			{
-				push(@{$fdata} ,
-				struct_read($ftype, $parent_structs,$struct_start, $struct_end, $array_last ));
+				my $s = struct_read($ftype, $parent_structs,$struct_start, $struct_end, $array_last);
+				last unless(defined($s));
+				push(@{$fdata}, $s);
 
 				if(defined($array_last) and ( $$array_last == 1 or $$array_last eq $ftype))
 				{
@@ -1676,7 +1677,7 @@ sub write_type
 		my $refout = &{$primative_toraw{$type}}($data, $count);
 		print "$type $name $count\n" if($count <0);
 
-		if(defined($primative_sizebits{$type}))
+		if(defined($primative_sizebits{$type}) && defined($count))
 		{
 			if(!defined($count))
 			{
@@ -1717,8 +1718,9 @@ sub write_type
 sub write_structs
 {
 	my($fh, $type, $structs_ref, $fcount, $parent_structs, $struct_start, $struct_end, $array_last) = @_;
-	my $fcountunset = $fcount;
 
+	undef $fcount if($fcount eq '');
+	my $fcounthave = 0;
 
 	print STDERR "negative count $fcount\n" if($fcount < 0);
 
@@ -1732,9 +1734,13 @@ sub write_structs
 		for my $struct_ref (@refs)
 		{
 			struct_write($type, $struct_ref, $parent_structs, $struct_start, $struct_end, $array_last);
-			$fcountunset--;
+			$fcounthave++;
 		}
 	}
+	return unless(defined($fcount));
+
+	my $fcountunset = $fcount - $fcounthave;
+
 	print STDERR "too many $fcount ($fcountunset) $type\n" if($fcountunset < 0);
 	if($fcountunset >0)
 	{
