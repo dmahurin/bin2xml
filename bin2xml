@@ -56,21 +56,6 @@ sub reverse_bytes
 	return $out;
 }
 
-sub reverse_byte_parts
-{
-	my($buf, $partsize, $unitsize) = @_;
-	my(@parts);
-	while($buf ne '')
-	{
-		push(@parts, substr($buf, 0, $partsize, ''));
-	}
-	while(@bytes)
-	{
-		$out .= reverse(splice(@parts, 0, $unitsize));
-	}
-	return $out;
-}
-
 sub pack_float
 {
 	my(@nums) = @_;
@@ -1508,31 +1493,6 @@ sub struct_read_xml
 	return  \%this_struct;
 }
 
-sub bufref_resize
-{
-   my($bufref, $size) = @_;
-  
-   return $bufref unless(ref ($bufref) eq "SCALAR");
-
-   my($slen) = length($$bufref);
-
-   return $bufref if($slen == $size);
-
-   if($slen > $size)
-   {
-     $$bufref = substr($$bufref, 0, $size); 
-   }
-   else
-   {
-  for(; $slen < $size; $slen++)
-  {
-     $$bufref .= '\0';
-  }
-  }
-  return $bufref;
-}
-
-
 sub struct_write
 {
 	my($type, $structref, $parent_structs, $struct_start, $struct_end, $array_last) = @_;
@@ -1760,48 +1720,6 @@ sub data_has_value
 	return 1;
 }
 
-sub struct_write_xml1
-{
-   my($type, $name, $dataref, $indent) = @_;
-   $indent = "" unless(defined($indent));
-   unless(defined($dataref)) 
-   {
-	print STDERR "undefined structure $type $name\n";
-	return;
-   }
-   if(defined($primative_tostring{$type}))
-   {
-      my $strout = &{$primative_tostring{$type}}($dataref);
-      print OUTFILE "$indent<$name>$strout</$name>\n";
-   }
-   elsif(defined($structs{$type}))
-   {
-      for my $structref (@$dataref)
-      {
-        for my $field (@{$structs{$type}})
-	{
-		my($ftype, $fname, $fcount) = @$field;
-		next unless(data_has_value($structref->{$fname}));
-        	print OUTFILE "$indent<$fname>\n";
-		struct_write_xml($ftype, $fname, $structref->{$fname}, $indent . "\t");
-      		print OUTFILE "$indent</$fname>\n";
-	}
-      }
-   }
-}
-
-#sub struct_has_fields
-#{
-#	my($type) = @_;
-#	for my $name_fields (@{$structs{$type}})
-#	{
-#		my($fname, $fields) =  @$name_fields;
-#		my($ftype, $fcount, $ftrans, $fvalue, $foffset, $fptype, $fpname, $fpsize) = @$fields;
-#		next unless $ftype eq "EVAL";
-#	
-#
-#}
-
 sub get_primative_param_string
 {
 	my($type, $structref) = @_;
@@ -1973,27 +1891,6 @@ sub struct_size
 		}
 	}
 	return $size;
-}
-
-sub myseek
-{
-	my($fh, $pos) = @_;
-	my($cpos) = tell($fh);
-	if($pos < $cpos)
-	{
-		print "back seek\n";
-		return seek($fh, $pos, 0);
-	}
-	else
-	{
-		my $buf;
-		my $r = read($fh, $buf, $pos - $cpos);
-		return undef unless(defined($r));
-		return 1 unless($buf =~ /[^\0]/);
-		print "seeking over non-zero data\n";
-		print "at offset $cpos +". length($`) . "\n";
-		return 2;
-	}
 }
 
 sub fdata_value
