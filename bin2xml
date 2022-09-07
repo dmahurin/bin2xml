@@ -23,19 +23,17 @@ my %translations;
 my %reverse_translations;
 my $file_settings;
 
-#my $debug = 1;
+my $debug = 0;
 
 my $minimal_xml = 1;
 
 my $reverse_byte_native_floats;
+my $n125 = unpack('N', pack("f", -1.25));
+if($n125 == 0xa0bf) { $reverse_byte_native_floats = 1; }
+elsif($n125 == 0xbfa00000) { $reverse_byte_native_floats = 0; }
+else
 {
-	my $n125 = unpack('N', pack("f", -1.25));
-	if($n125 == 0xa0bf) { $reverse_byte_native_floats = 1; }
-	elsif($n125 == 0xbfa00000) { $reverse_byte_native_floats = 0; }
-	else
-	{
-		printf STDERR "unknown native float format: -1.25 == 0x%x\n", $n125;
-	}
+	printf STDERR "unknown native float format: -1.25 == 0x%x\n", $n125;
 }
 
 sub reverse_bytes
@@ -156,7 +154,8 @@ sub split_strings
 sub parse_translation
 {
 	my($lines) = @_;
-	my(%translation, %reverse_translation);
+	my(%translation);
+	my(%reverse_translation);
 	for my $line (split(/\s*\n\s*/ms, $lines))
 	{
 		my($old, $new) = split_strings($line);
@@ -196,6 +195,7 @@ unless(defined($outfile))
 }
 local %structs;
 local %struct_fields;
+my(%primative_read);
 my(%primative_sizebits);
 my(%primative_fromraw);
 my(%primative_toraw);
@@ -236,16 +236,13 @@ sub primative_read_CSTRING
 	my($outbuf) = "";
 	while($count--)
 	{
-#print "CSTRING r$count\n";
 		my($c);
-		do
+		while(read($fh, $c, 1))
 		{
-			last unless(read($fh, $c, 1));
 			$outbuf .= $c;
+			last unless($c ne "\0");
 		}
-		while($c ne "\0");
 	}
-#	print "CSTRING out: $outbuf\n";
 	return $outbuf;
 }
 $primative_read{"CSTRING"} = \&primative_read_CSTRING;
@@ -322,7 +319,7 @@ $primative_fromraw{"SB"} = \&primative_fromraw_SB;
 sub primative_fromraw_HEXDATA
 {
 	my($bufref) = @_;
-#	return undef if($$bufref =~ m:^\0*$:); #don't store zero data
+#	return undef if($$bufref =~ m/^\0*$/); #don't store zero data
 	return $bufref;
 }
 $primative_fromraw{"HEXDATA"} = \&primative_fromraw_HEXDATA;
@@ -761,8 +758,8 @@ $primative_fromstring{"CSTRING"} = \&primative_fromstring_UI8;
 
 while(1)
 {
-#if($text =~ m%^\s*([\w]+\*?):\s*\n\s*([^:]*)\s*\n:\n%s )
-if($text =~ m%^\s*([\w]+\*?):\s*\n\s*(.*?):\n%s )
+#if($text =~ m/^\s*([\w]+\*?):\s*\n\s*([^:]*)\s*\n:\n/s )
+if($text =~ m/^\s*([\w]+\*?):\s*\n\s*(.*?):\n/s )
 {
 	my($structname) = $1;
 	my($fields) = $2;
@@ -773,14 +770,14 @@ if($text =~ m%^\s*([\w]+\*?):\s*\n\s*(.*?):\n%s )
         for my $field (split(/\s*\n\s*/ms, $fields))
         {
 		next if $field eq "";
-		unless($field =~ m:^
+		unless($field =~ m/^
 			(\[([^\]]*)\]\s*)? # [$2]
 			(([\w{}]+)(\s*\[([^\[\]]+)\])?\@)? # $4[$6]@
 			([\w{}]+)(\s*\[([^\[\]]*)\])? # $7[$9]
 			(\s+\<([\w{}]+)\>)? # <$11>
 			(\s+((\w+)\@)?(\w+))? # 14@15
 			(\s=\s*(.*))? # =17
-			$:x) { print "RRR $field\n"; }
+			$/x) { print "RRR $field\n"; }
 		my($offset, $ptype, $pcount, $stype, $count, $trans, $pname, $name, $value) = ($2, $4, $6, $7, $9, $11, $14, $15, $17);
 		print '($offset, $ptype, $pcount, $stype, $count, $trans, $pname, $name, $value) = ($2, $4, $6, $7, $9, $11, $14, $15, $17) = ' . "$offset, $ptype, $pcount, $stype, $count, $trans, $pname, $name, $value\n" if ($debug);
                 $count = 1 unless(defined($count));
@@ -805,7 +802,7 @@ if($text =~ m%^\s*([\w]+\*?):\s*\n\s*(.*?):\n%s )
 	}
 	$text = $'; #indentfix->';
 }
-elsif($text =~ m%^\s*([\w\d]*)=$([^=]+)^=$%ms )
+elsif($text =~ m/^\s*([\w\d]*)=$([^=]+)^=$/ms )
 {
 	if($1 eq '')
 	{
@@ -855,7 +852,7 @@ elsif($file_settings->{"BYTE_ORDER"} eq 'vax_except_bits')
 }
 
 
-if($infile =~ m:\.xml$:)
+if($infile =~ m/\.xml$/)
 {
 print "xml to raw\n";
 open(INFILE, $infile);
@@ -874,7 +871,7 @@ if(defined($file_settings->{"SECTOR_SIZE"}))
 }
 close(OUTFILE);
 }
-elsif($outfile =~ m:\.xml$:)
+elsif($outfile =~ m/\.xml$/)
 {
 print "raw to xml\n";
 open(INFILE, $infile);
@@ -1183,7 +1180,7 @@ sub expression_value
 	
 	return "()" unless(defined($value));
 	return "''" if($value eq '');
-	return "'$value'" if($value =~ m:[^\d]:);
+	return "'$value'" if($value =~ m/[^\d]/);
 	return $value;
 }
 
@@ -1241,7 +1238,7 @@ sub struct_expression
 	return ($buf) unless($buf =~ /\D/);
 	my($buf2) = '';
 	my $buf0 = $buf;
-	while($buf =~ m:count\(([A-Za-z_]\w*)\):)
+	while($buf =~ m/count\(([A-Za-z_]\w*)\)/)
 	{
 		$buf = $'; #';#<-indent fix
 		$buf2 .= $`;
@@ -1263,7 +1260,7 @@ sub struct_expression
 			$buf2 .= "count($1)";
 		}
 	}
-	while($buf =~ m:([A-Za-z_]\w*):)
+	while($buf =~ m/([A-Za-z_]\w*)/)
 	{
 		$buf = $'; #';#<-indent fix
 		$buf2 .= $`;
@@ -1369,8 +1366,8 @@ sub struct_read_xml
 	local $/ = '>';
 	while((!$singletag) and defined(my $tag = <INFILE>))
 	{
-		last unless ($tag =~ m:\S:m);
-		unless($tag =~ m:^\s*\<\s*([^\>\s]+)([^\>]+)*\>$:m)
+		last unless ($tag =~ m/\S/m);
+		unless($tag =~ m/^\s*\<\s*([^\>\s]+)([^\>]+)*\>$/m)
 		{
 			print "$stype: did not get expected tag in $name: $tag\n";
 			last;

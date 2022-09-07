@@ -31,18 +31,18 @@ $text =~ s:#.*(?=$)::gm;
 # splits a string up by spaces or as enclosed by quotes
 sub split_strings
 {
-	my($in) = @_;
+	my($s) = @_;
 	my(@out);
-	while($in ne '' && 
+	while($s ne '' &&
 		(
-		$in =~ m/^\'([^\']*)\'(\s+|$)/ or
-		$in =~ m/^\"([^\"]*)\"(\s+|$)/ or
-		$in =~ m/^(\S*)(\s+|$)/ ) )
+		$s =~ m/^\'([^\']*)\'(\s+|$)/ or
+		$s =~ m/^\"([^\"]*)\"(\s+|$)/ or
+		$s =~ m/^(\S*)(\s+|$)/ ) )
 	{
 		push(@out, $1);
-		$in = $';
+		$s = $';
 	}
-	return undef if($in ne "");
+	return undef if($s ne "");
 	return @out;
 }
 
@@ -52,23 +52,22 @@ sub parse_translation
 	my(%translation, %reverse_translation);
 	for my $line (split(/\s*\n\s*/ms, $lines))
 	{
-		my($from, $to) = split_strings($line);
-		$from = hex($from) if($from =~ /^0x/);
-		$to = hex($to) if($from =~ /^0x/);
-		next if(! defined($from));
-		next if($from eq "" and $to eq "");
-		$translation{$from} = $to;
-		$reverse_translation{$to} = $from;
+		my($old, $new) = split_strings($line);
+		$old = hex($old) if($old =~ /^0x/);
+		$new = hex($new) if($new =~ /^0x/);
+		next unless defined($old);
+		next if($old eq "" and $new eq "");
+		$translation{$old} = $new;
+		$reverse_translation{$new} = $old;
 	}
 	return(\%translation, \%reverse_translation);
 }
 
 sub parse_bfmt_struct
 {
-	my(@struct);
 	my($textref, $structsref, $structfieldsref) = @_;
-	unless($$textref =~ m%^\s*([\w]+\*?):\s*\n\s*(.*?):\n%s )
-	{ return undef; }
+	my(@struct);
+	return undef unless($$textref =~ m%^\s*([\w]+\*?):\s*\n\s*(.*?):\n%s );
 
 	my($structname) = $1;
 	my($fields) = $2;
@@ -117,8 +116,7 @@ sub parse_bfmt_translation
 {
 	my($textref, $translations_ref, $reverse_translations_ref, $file_settings_ref) = @_;
 
-	unless($text =~ m%^\s*([\w\d]*)=$([^=]+)^=$%ms )
-	{ return undef; }
+	return undef unless($text =~ m%^\s*([\w\d]*)=$([^=]+)^=$%ms );
 	if($1 eq '')
 	{
 		($$file_settings) = parse_translation($2);
@@ -137,7 +135,7 @@ while(1)
 	{
 	}
 	elsif(parse_bfmt_translation(\$text, \%translations, \%reverse_translations)) {
-}
+	}
 	else { last; }
 }
 my %seen;
