@@ -44,7 +44,7 @@ sub reverse_bytes
 	my(@bytes) = split(//, $buf);
 	my $out = '';
 	my $i = 0;
-	unless(@bytes % $numsize == 0)
+	unless(scalar(@bytes) % $numsize == 0)
 	{
 		print STDERR "internal misalignment error $numsize\n";
 		return undef;
@@ -1292,7 +1292,7 @@ sub struct_expression
 	my (@rtn) = eval($buf2);
 	return (@rtn);
 	print STDERR "eval $buf0 => $buf2\n" if($@);
-	$rtn[0] = 0 unless(@rtn and $rtn[0] ne '');
+	$rtn[0] = 0 unless(scalar(@rtn) and $rtn[0] ne '');
 	return @rtn;
 }
 
@@ -1324,7 +1324,7 @@ sub string_to_data
 				
 		$fdata =
 		&{$primative_fromstring{$ftype}}($fdata_value, $fcountset,$reverse_translations{$ftrans});
-		#$fcountset = $fcount = @$fdata unless(defined($fcountset) or ref $fdata ne "ARRAY");
+		#$fcountset = $fcount = scalar(@$fdata) unless(defined($fcountset) or ref $fdata ne "ARRAY");
 		$fcountset = $fcount = ceil(length($$fdata)*8/$primative_sizebits{$ftype}) unless(defined($fcountset));
 	}
 	else
@@ -1435,7 +1435,7 @@ sub struct_read_xml
 				push(@$parent_structs, \%this_struct);
 				push(@$fdata, struct_read_xml($ftype, $fname, $params, $parent_structs));
 				pop(@$parent_structs);
-				$fcountset = $fcount = @$fdata unless(defined($fcountset));
+				$fcountset = $fcount = scalar(@$fdata) unless(defined($fcountset));
 			}
 			#elsif($ftype eq "EVAL") { next; }
 			#elsif($ftype eq "EVAL")
@@ -1483,7 +1483,7 @@ sub struct_read_xml
 		($fvalue) = struct_expression($struct_fields{$type}, \%this_struct, $fvalue, $parent_structs);
 		next unless(defined($primative_fromstring{$ftype}));
 		my($fdata) = &{$primative_fromstring{$ftype}}($fvalue);
-		my $fcount = ref($fdata) eq "ARRAY" ? @$fdata : 1;
+		my $fcount = ref($fdata) eq "ARRAY" ? scalar(@$fdata) : 1;
 
 		@{$this_struct{$fname}} = ($fdata, $fcount, $fcount);
 	}
@@ -1594,7 +1594,7 @@ printf ("off: %d(%x) %d(%x) + %d\n", tell(OUTFILE), tell(OUTFILE), tell(OUTFILE)
 			defined($fpname) and
 			defined($structref->{$fpname}) and
 			ref $fdata eq "ARRAY" and
-			@$fdata);
+			scalar(@$fdata));
 
 		
                 my($fpdata, $fpdatacount, $fptotalcount) = @{$structref->{$fpname}};
@@ -1798,7 +1798,7 @@ sub struct_write_xml
 
 		if (!defined($primative_tostring{$ftype}) and $ftype ne "EVAL")
 		{
-			next unless(@$fdata > 1 or @$fdata == 1 and %{$fdata->[0]});
+			next unless(scalar(@$fdata) > 1 or scalar(@$fdata) == 1 and %{$fdata->[0]});
 		}
 		elsif($minimal_xml and (! defined($fptype)) and $type ne "MAIN")
 		{
