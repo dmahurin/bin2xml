@@ -496,7 +496,7 @@ MEDIA_ATTRIBUTES1:
 	SKIPBYTE[16] reserved
          
 	UI16 num_sub_picture_streams
-	SUB_PICTURE_STREAM_ATTRIBUTES[1,num_sub_picture_streams] sub_picure_stream_attributes
+	SUB_PICTURE_STREAM_ATTRIBUTES[1,num_sub_picture_streams] sub_picture_stream_attributes
 :
 
 MULTICHANNEL_EXTENSION_DEFAULT:
@@ -539,7 +539,7 @@ MEDIA_ATTRIBUTES2:
 	SKIPBYTE[16] reserved
          
 	UI16 num_sub_picture_streams
-	SUB_PICTURE_STREAM_ATTRIBUTES[32,num_sub_picture_streams] sub_picure_stream_attributes
+	SUB_PICTURE_STREAM_ATTRIBUTES[32,num_sub_picture_streams] sub_picture_stream_attributes
 :
 
 VTS_ATR:
@@ -664,9 +664,9 @@ VTSI:
 	[vts_pgci_ut_start_sector*2048] PGCI_UT vts_pgci_ut
 	[vts_tmapti_start_sector*2048] TMAPTI vts_tmapti
 	[vtsm_c_adt_start_sector*2048] C_ADT vtsm_c_adt
-	[vtsm_vobu_admap_start_sector*2048] VOBU_ADMAP vtsm_vob_admap
+	[vtsm_vobu_admap_start_sector*2048] VOBU_ADMAP vtsm_vobu_admap
 	[vts_c_adt_start_sector*2048] C_ADT vts_c_adt
-	[vts_vobu_admap_start_sector*2048] VOBU_ADMAP vts_vob_admap
+	[vts_vobu_admap_start_sector*2048] VOBU_ADMAP vts_vobu_admap
 :
 
 VMGI:
@@ -716,13 +716,11 @@ VMGI:
 //    VMGI_MAT vmgi_mat // Video Manager Information Management Table
 //    VMGM_VOB vmgm_vob // Video Manager Menu VideoObjectSet
 //    VMG_PTT_SRPTI vmg_ptt_srpti // Part of title search pointer table information
-:
 
 IFO_TYPE=
 	"DVDVIDEO-VMG" "VMGI"
 	"DVDVIDEO-VTS" "VTSI"
 =
-	
 
 USER_OPS=
 	0 time-play
