@@ -268,8 +268,7 @@ sub primative_fromraw_UB
 	my($prebits) = '';
 	while($align--) { $prebits .= '0'}
 
-	my(@bufout) = unpack("${uib32_pack}*", pack("B*", $prebits . $bits));
-	return \@bufout;
+	return [unpack("${uib32_pack}*", pack("B*", $prebits . $bits))];
 }
 $primative_fromraw{"UB"} = \&primative_fromraw_UB;
 
@@ -311,8 +310,7 @@ sub primative_fromraw_SB
 	my($fillbit) = substr($bits, 0, 1);
 	while($align--) { $prebits .= $fillbit}
 
-	my(@bufout) = unpack_signed_ints("${uib32_pack}*", pack("B*", $prebits . $bits));
-	return \@bufout;
+	return [unpack_signed_ints("${uib32_pack}*", pack("B*", $prebits . $bits))];
 }
 $primative_fromraw{"SB"} = \&primative_fromraw_SB;
 
@@ -349,8 +347,7 @@ $primative_toraw{"CHAR"} = \&primative_toraw_CHAR;
 sub primative_fromraw_CSTRING
 {
 	my($bufref) = @_;
-	my(@s) = split(/\x00/, $$bufref);
-	return \@s;
+	return [split(/\x00/, $$bufref)];
 }
 $primative_fromraw{"CSTRING"} = \&primative_fromraw_CSTRING;
 
@@ -395,48 +392,42 @@ $primative_toraw{"SKIPBYTE"} = \&primative_toraw_SKIPBITS;
 sub primative_fromraw_F64
 {
 	my($bufref) = @_;
-	my(@bufout) = unpack_double($$bufref);
-	return \@bufout;
+	return [unpack_double($$bufref)];
 }
 $primative_fromraw{"F64"} = \&primative_fromraw_F64;
 
 sub primative_toraw_F64
 {
 	my($bufref) = @_;
-	my($bufout) = pack_double(@$bufref);
-	return \$bufout;
+	return [pack_double(@$bufref)];
 }
 $primative_toraw{"F64"} = \&primative_toraw_F64;
 
 sub primative_fromraw_F32
 {
 	my($bufref) = @_;
-	my(@bufout) = unpack_float($$bufref);
-	return \@bufout;
+	return [unpack_float($$bufref)];
 }
 $primative_fromraw{"F32"} = \&primative_fromraw_F32;
 
 sub primative_toraw_F32
 {
 	my($bufref) = @_;
-	my($bufout) = pack_float(@$bufref);
-	return \$bufout;
+	return [pack_float(@$bufref)];
 }
 $primative_toraw{"F32"} = \&primative_toraw_F32;
 
 sub primative_fromraw_UI32
 {
    my($bufref) = @_;
-   my(@bufout) = unpack("${ui32_pack}*", $$bufref);
-   return \@bufout;
+   return [unpack("${ui32_pack}*", $$bufref)];
 }
 $primative_fromraw{"UI32"} = \&primative_fromraw_UI32;
 
 sub primative_fromraw_UI8
 {
    my($bufref) = @_;
-   my(@bufout) = unpack('C*', $$bufref);
-   return \@bufout;
+   return [unpack('C*', $$bufref)];
 }
 $primative_fromraw{"UI8"} = \&primative_fromraw_UI8;
 
@@ -477,8 +468,7 @@ sub fixedtoui16
 sub primative_fromraw_UF16
 {
 	my($bufref) = @_;
-	my(@bufout) = ui16tofixed(unpack("${ui16_pack}*", $$bufref));
-	return \@bufout;
+	return [ui16tofixed(unpack("${ui16_pack}*", $$bufref))];
 }
 $primative_fromraw{"UF16"} = \&primative_fromraw_UF16;
 
@@ -493,8 +483,7 @@ $primative_toraw{"UF16"} = \&primative_toraw_UF16;
 sub primative_fromraw_UI16
 {
    my($bufref) = @_;
-   my(@bufout) = unpack("${ui16_pack}*", $$bufref);
-   return \@bufout;
+   return [unpack("${ui16_pack}*", $$bufref)];
 }
 $primative_fromraw{"UI16"} = \&primative_fromraw_UI16;
 
@@ -742,8 +731,7 @@ $primative_tostring{"CSTRING"} = \&primative_tostring_UI8;
 sub primative_fromstring_UI8
 {
 	my($instr,$count,$rtrans) = @_;
-	my @out = translate($rtrans,split(',', $instr));
-	return \@out;
+	return [translate($rtrans,split(',', $instr))];
 }
 $primative_fromstring{"UI8"} = \&primative_fromstring_UI8;
 $primative_fromstring{"UI16"} = \&primative_fromstring_UI8;
