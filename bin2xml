@@ -750,140 +750,11 @@ $primative_fromstring{"UB"} = \&primative_fromstring_UI8;
 $primative_fromstring{"SB"} = \&primative_fromstring_UI8;
 $primative_fromstring{"CSTRING"} = \&primative_fromstring_UI8;
 
-while(1)
+sub fdata_value
 {
-	#if($text =~ m/^\s*([\w]+\*?):\s*\n\s*([^:]*)\s*\n:\n/s )
-	if($text =~ m/^\s*([\w]+\*?):\s*\n\s*(.*?):\n/s )
-	{
-		my($structname) = $1;
-		my($fields) = $2;
-		print "struct: $structname\n" if($debug);
-		@{$structs{$structname}} = ();
+	my($fdata) = @_;
 
-		my $i = 1;
-		for my $field (split(/\s*\n\s*/ms, $fields))
-		{
-			next if $field eq "";
-			unless($field =~ m/^
-				(\[([^\]]*)\]\s*)? # [$2]
-				(([\w{}]+)(\s*\[([^\[\]]+)\])?\@)? # $4[$6]@
-				([\w{}]+)(\s*\[([^\[\]]*)\])? # $7[$9]
-				(\s+\<([\w{}]+)\>)? # <$11>
-				(\s+((\w+)\@)?(\w+))? # 14@15
-				(\s=\s*(.*))? # =17
-				$/x) { print "RRR $field\n"; }
-			my($offset, $ptype, $pcount, $stype, $count, $trans, $pname, $name, $value) = ($2, $4, $6, $7, $9, $11, $14, $15, $17);
-			print '($offset, $ptype, $pcount, $stype, $count, $trans, $pname, $name, $value) = ($2, $4, $6, $7, $9, $11, $14, $15, $17) = ' . "$offset, $ptype, $pcount, $stype, $count, $trans, $pname, $name, $value\n" if ($debug);
-			$count = 1 unless(defined($count));
-			undef $count if($count eq '');
-			$name = $stype . $i unless(defined($name));
-			if(defined($ptype))
-			{
-				$pcount = 1 unless(defined($pcount));
-				my $fields = [ $stype, $count, $trans, $value, $offset, $ptype, $pname, $pcount ];
-				push(@{$structs{$structname}}, [ $name, $fields ]);
-				$struct_fields{$structname}->{$name} = $fields;
-				# when reading xml, we need the ptypes as fields too
-				$struct_fields{$structname}->{$pname} = [ $ptype, $pcount ];
-			}
-			else
-			{
-				my $fields = [ $stype, $count, $trans, $value, $offset ];
-				push(@{$structs{$structname}}, [ $name, $fields ]);
-				$struct_fields{$structname}->{$name} = $fields;
-			}
-			$i++;
-		}
-		$text = $'; #indentfix->';
-	}
-	elsif($text =~ m/^\s*([\w\d]*)=$([^=]+)^=$/ms )
-	{
-		if($1 eq '')
-		{
-			($file_settings) = parse_translation($2);
-		}
-		else
-		{
-			($translations{$1}, $reverse_translations{$1}) = parse_translation($2);
-		}
-		$text = $';
-	}
-	else { last; }
-}
-
-for my $structname (keys %structs)
-{
-	print "struct $structname\n" if ($debug);
-	for my $name_fields (@{$structs{$structname}})
-	{
-		my($name, $fields) = @$name_fields;
-		my($stype, $count) = @$fields;
-		print "fields: stype $stype, name $name, size $count\n" if($debug);
-	}
-}
-
-if($file_settings->{"BYTE_ORDER"} eq 'vax')
-{
-	$ui32_pack = 'V';
-	$ui16_pack = 'v';
-	$f32_reverse_bytes = 1;
-	$uib32_pack = 'V';
-}
-elsif($file_settings->{"BYTE_ORDER"} eq 'vax_swf')
-{
-	$ui32_pack = 'V';
-	$ui16_pack = 'v';
-	$f32_reverse_bytes = 1;
-	$f32_reverse_ints = 1;
-	$uib32_pack = 'N';
-}
-elsif($file_settings->{"BYTE_ORDER"} eq 'vax_except_bits')
-{
-	$ui32_pack = 'V';
-	$ui16_pack = 'v';
-	$f32_reverse_bytes = 1;
-	$uib32_pack = 'N';
-}
-
-
-if($infile =~ m/\.xml$/)
-{
-	print "xml to raw\n";
-	open(INFILE, $infile);
-	open(OUTFILE, ">$outfile");
-	my $mainref = struct_read_xml("MAIN");
-	#struct_write_xml("MAIN", "", $mainref);
-	struct_write("MAIN", $mainref);
-	close(INFILE);
-	if(defined($file_settings->{"SECTOR_SIZE"}))
-	{
-		seek(OUTFILE,0,2);
-		my($remain) = tell(OUTFILE) % $file_settings->{"SECTOR_SIZE"};
-		$remain = 2048 - $remain if($remain);
-		my($buf) = pack("Z$remain", "");
-		print OUTFILE $buf;
-	}
-	close(OUTFILE);
-}
-elsif($outfile =~ m/\.xml$/)
-{
-	print "raw to xml\n";
-	open(INFILE, $infile);
-	open(OUTFILE, ">$outfile");
-	my $mainref = struct_read("MAIN");
-	struct_write_xml("MAIN", "", $mainref);
-	close(INFILE);
-	close(OUTFILE);
-}
-else
-{
-	open(INFILE, $infile);
-	open(OUTFILE, ">$outfile");
-	my $mainref = struct_read("MAIN");
-	struct_write("MAIN", $mainref);
-	close(INFILE);
-	close(OUTFILE);
-	print "unknown conversion\n";
+	return (ref($fdata) eq 'ARRAY') ? $fdata->[0] : $fdata;
 }
 
 sub struct_read
@@ -1885,17 +1756,146 @@ sub struct_size
 	return $size;
 }
 
-sub fdata_value
-{
-	my($fdata) = @_;
-
-	return (ref($fdata) eq 'ARRAY') ? $fdata->[0] : $fdata;
-}
-
 sub fdata_equals
 {
 	my($fdata, $fvalue) = @_;
 
 	return fdata_value($fdata) eq $fvalue;
+}
+
+while(1)
+{
+	#if($text =~ m/^\s*([\w]+\*?):\s*\n\s*([^:]*)\s*\n:\n/s )
+	if($text =~ m/^\s*([\w]+\*?):\s*\n\s*(.*?):\n/s )
+	{
+		my($structname) = $1;
+		my($fields) = $2;
+		print "struct: $structname\n" if($debug);
+		@{$structs{$structname}} = ();
+
+		my $i = 1;
+		for my $field (split(/\s*\n\s*/ms, $fields))
+		{
+			next if $field eq "";
+			unless($field =~ m/^
+				(\[([^\]]*)\]\s*)? # [$2]
+				(([\w{}]+)(\s*\[([^\[\]]+)\])?\@)? # $4[$6]@
+				([\w{}]+)(\s*\[([^\[\]]*)\])? # $7[$9]
+				(\s+\<([\w{}]+)\>)? # <$11>
+				(\s+((\w+)\@)?(\w+))? # 14@15
+				(\s=\s*(.*))? # =17
+				$/x) { print "RRR $field\n"; }
+			my($offset, $ptype, $pcount, $stype, $count, $trans, $pname, $name, $value) = ($2, $4, $6, $7, $9, $11, $14, $15, $17);
+			print '($offset, $ptype, $pcount, $stype, $count, $trans, $pname, $name, $value) = ($2, $4, $6, $7, $9, $11, $14, $15, $17) = ' . "$offset, $ptype, $pcount, $stype, $count, $trans, $pname, $name, $value\n" if ($debug);
+			$count = 1 unless(defined($count));
+			undef $count if($count eq '');
+			$name = $stype . $i unless(defined($name));
+			if(defined($ptype))
+			{
+				$pcount = 1 unless(defined($pcount));
+				my $fields = [ $stype, $count, $trans, $value, $offset, $ptype, $pname, $pcount ];
+				push(@{$structs{$structname}}, [ $name, $fields ]);
+				$struct_fields{$structname}->{$name} = $fields;
+				# when reading xml, we need the ptypes as fields too
+				$struct_fields{$structname}->{$pname} = [ $ptype, $pcount ];
+			}
+			else
+			{
+				my $fields = [ $stype, $count, $trans, $value, $offset ];
+				push(@{$structs{$structname}}, [ $name, $fields ]);
+				$struct_fields{$structname}->{$name} = $fields;
+			}
+			$i++;
+		}
+		$text = $'; #indentfix->';
+	}
+	elsif($text =~ m/^\s*([\w\d]*)=$([^=]+)^=$/ms )
+	{
+		if($1 eq '')
+		{
+			($file_settings) = parse_translation($2);
+		}
+		else
+		{
+			($translations{$1}, $reverse_translations{$1}) = parse_translation($2);
+		}
+		$text = $';
+	}
+	else { last; }
+}
+
+for my $structname (keys %structs)
+{
+	print "struct $structname\n" if ($debug);
+	for my $name_fields (@{$structs{$structname}})
+	{
+		my($name, $fields) = @$name_fields;
+		my($stype, $count) = @$fields;
+		print "fields: stype $stype, name $name, size $count\n" if($debug);
+	}
+}
+
+if($file_settings->{"BYTE_ORDER"} eq 'vax')
+{
+	$ui32_pack = 'V';
+	$ui16_pack = 'v';
+	$f32_reverse_bytes = 1;
+	$uib32_pack = 'V';
+}
+elsif($file_settings->{"BYTE_ORDER"} eq 'vax_swf')
+{
+	$ui32_pack = 'V';
+	$ui16_pack = 'v';
+	$f32_reverse_bytes = 1;
+	$f32_reverse_ints = 1;
+	$uib32_pack = 'N';
+}
+elsif($file_settings->{"BYTE_ORDER"} eq 'vax_except_bits')
+{
+	$ui32_pack = 'V';
+	$ui16_pack = 'v';
+	$f32_reverse_bytes = 1;
+	$uib32_pack = 'N';
+}
+
+
+if($infile =~ m/\.xml$/)
+{
+	print "xml to raw\n";
+	open(INFILE, $infile);
+	open(OUTFILE, ">$outfile");
+	my $mainref = struct_read_xml("MAIN");
+	#struct_write_xml("MAIN", "", $mainref);
+	struct_write("MAIN", $mainref);
+	close(INFILE);
+	if(defined($file_settings->{"SECTOR_SIZE"}))
+	{
+		seek(OUTFILE,0,2);
+		my($remain) = tell(OUTFILE) % $file_settings->{"SECTOR_SIZE"};
+		$remain = 2048 - $remain if($remain);
+		my($buf) = pack("Z$remain", "");
+		print OUTFILE $buf;
+	}
+	close(OUTFILE);
+}
+elsif($outfile =~ m/\.xml$/)
+{
+	print "raw to xml\n";
+	open(INFILE, $infile);
+	open(OUTFILE, ">$outfile");
+	my $mainref = struct_read("MAIN");
+	struct_write_xml("MAIN", "", $mainref);
+	close(INFILE);
+	close(OUTFILE);
+}
+else
+{
+	open(INFILE, $infile);
+	open(OUTFILE, ">$outfile");
+	my $mainref = struct_read("MAIN");
+	struct_write("MAIN", $mainref);
+	close(INFILE);
+	close(OUTFILE);
+	print "unknown conversion\n";
 }
 
