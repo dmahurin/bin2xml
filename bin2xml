@@ -1646,7 +1646,7 @@ sub struct_write_xml
 		$ftrans = expand_struct_type($struct_fields{$stype}, $structref, $ftrans);
 		next if($ftype eq "OFFSET_START");
 		next unless(defined($structref->{$fname}));
-		my($fdata, $fdatacount) = @{$structref->{$fname}};
+		my($fdata, $fdatacount, $fcount) = @{$structref->{$fname}};
 		next unless($fdatacount);
 		next unless(data_has_value($fdata));
 		print "xml out $fname, $ftype, $fcount\n" if($debug);
@@ -1702,7 +1702,7 @@ sub struct_write_xml
 		}
 
 		next unless(defined($fptype));
-		my($fpdata, $fpdatacount) = @{$structref->{$fpname}};
+		my($fpdata, $fpdatacount, $fpcount) = @{$structref->{$fpname}};
 
 		if(defined($primative_tostring{$fptype}))
 		{
