@@ -531,13 +531,12 @@ TAG_DATA_END:
 :
 
 TAGGED_BLOCK:
-	UI16 _tag_id_len = tag_id << 6 | (have_long_len ? 0x3f : length)
+	UI16 _tag_id_len = tag_id << 6 | short_len
 	EVAL <TAGID> tag_id = _tag_id_len >> 6
-	EVAL _short_len = _tag_id_len & 0x3f
-	EVAL have_long_len = int(_short_len == 0x3f)
-	UI32[have_long_len] _long_len = have_long_len ? length : undef
-	EVAL length = _long_len or _short_len
-	EVAL DATA_END = length
+	EVAL short_len = _tag_id_len & 0x3f
+	EVAL _have_long_len = int(short_len == 0x3f)
+	UI32[_have_long_len] long_len
+	EVAL DATA_END = _have_long_len and long_len or short_len
 	TAG_DATA_{tag_id} data
 :
 

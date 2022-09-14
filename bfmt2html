@@ -1,277 +1,237 @@
-#!/usr/bin/perl
+#!/usr/bin/env python3
 # convert 'bfmt' binary file specification to html
 # -Don Mahurin 2005-12
 # todo: share the bfmt parsing with bin2xml
 
-my($fmtfile, @names) = @ARGV;
+import sys
+import re
 
-unless(defined($fmtfile))
-{
-	print "usage: $0 BFMT\n";
-	exit(0);
-}
+debug = 0
 
-unless(@names)
-{
-	@names = ("MAIN");
-}
+if(len(sys.argv) < 2):
+	print("usage: m[0] BFMT")
+	sys.exit(0)
 
-my %structs;
-my %struct_fields;
+fmtfile = sys.argv[1]
 
-open(FMT, $fmtfile);
-local $/ = undef;
-my($text) = <FMT>;
-close(FMT);
+if(len(sys.argv) < 2):
+	names = sys.argv[2]
+else:
+	names = ["MAIN"]
+
+FMT = open(fmtfile, 'r')
+text = FMT.read()
+FMT.close()
 
 # remove comments, // comments or # comments
-$text =~ s:\/\/.*(?=$)::gm;
-$text =~ s:#.*(?=$)::gm;
+text = re.sub('\s*//.*', '', text)
+text = re.sub(r'\s*#.*', '', text)
 
 # splits a string up by spaces or as enclosed by quotes
-sub split_strings
-{
-	my($s) = @_;
-	my(@out);
-	while($s ne '' &&
+def split_strings(s):
+	out = []
+	while(s != '' and
 		(
-		$s =~ m/^\'([^\']*)\'(\s+|$)/ or
-		$s =~ m/^\"([^\"]*)\"(\s+|$)/ or
-		$s =~ m/^(\S*)(\s+|$)/ ) )
-	{
-		push(@out, $1);
-		$s = $';
-	}
-	return undef if($s ne "");
-	return @out;
-}
+		None is not (m := re.search(r'^\'([^\']*)\'(\s+|$)', s)) or
+		None is not (m := re.search(r'^\"([^\"]*)\"(\s+|$)', s)) or
+		None is not (m := re.search(r'^(\S*)(\s+|$)', s)) ) ):
+		out.append(m[1])
+		s = m.string[m.end():]
+	if(s != ""): return None
+	if(len(out) == 0): return ('', '')
+	return out
 
-sub parse_translation
-{
-	my($lines) = @_;
-	my(%translation, %reverse_translation);
-	for my $line (split(/\s*\n\s*/ms, $lines))
-	{
-		my($old, $new) = split_strings($line);
-		$old = hex($old) if($old =~ /^0x/);
-		$new = hex($new) if($new =~ /^0x/);
-		next unless defined($old);
-		next if($old eq "" and $new eq "");
-		$translation{$old} = $new;
-		$reverse_translation{$new} = $old;
-	}
-	return(\%translation, \%reverse_translation);
-}
+def parse_translation(lines):
+	translation = {}
+	reverse_translation = {}
+	for line in re.split('\s*\n\s*', lines, flags=re.M | re.S):
+		(old, new) = split_strings(line)
+		if(re.match('^0x',old)): old = int(old, 16)
+		elif(re.match('^-?\d+$',old)): old = int(old)
+		if(re.match('^0x',new)): new = int(new, 16)
+		elif(re.match('^-?\d+$',new)): new = int(new)
+		if None is (old): continue
+		if(old == "" and new == ""): continue
+		translation[old] = new
+		reverse_translation[new] = old
 
-sub parse_bfmt_struct
-{
-	my($textref, $structsref, $structfieldsref) = @_;
-	my(@struct);
-	return undef unless($$textref =~ m%^\s*([\w]+\*?):\s*\n\s*(.*?):\n%s );
+	return(translation, reverse_translation)
 
-	my($structname) = $1;
-	my($fields) = $2;
-	print "struct: $structname\n" if($debug);
-	@{$structsref->{$structname}} = ();
+def parse_bfmt_struct(text, structs, structfields):
+	struct = []
+	if None is (m := re.match(r'^\s*([\w]+\*?):\s*\n\s*(.*?):\n', text, re.S)): return None
 
-	my $i = 1;
-        for my $field (split(/\s*\n\s*/ms, $fields))
-        {
-		next if $field eq "";
-		unless($field =~ m:^
-			(\[([^\]]*)\]\s*)? # [$2]
-			(([\w{}]+)(\s*\[([^\[\]]+)\])?\@)? # $4[$6]@
-			([\w{}]+)(\s*\[([^\[\]]*)\])? # $7[$9]
-			(\s+\<([\w{}]+)\>)? # <$11>
-			(\s+((\w+)\@)?(\w+))? # 14@15
-			(\s=\s*(.*))? # =17
-			$:x) { print "RRR $field\n"; }
-		my($offset, $ptype, $pcount, $type, $count, $trans, $pname, $name, $value) = ($2, $4, $6, $7, $9, $11, $14, $15, $17);
-		print '($offset, $ptype, $pcount, $type, $count, $trans, $pname, $name, $value) = ($2, $4, $6, $7, $9, $11, $14, $15, $17) = ' . "$offset, $ptype, $pcount, $type, $count, $trans, $pname, $name, $value\n" if ($debug);
-                $count = 1 unless(defined($count));
-		undef $count if($count eq '');
-		$name = $type . $i unless(defined($name));
-		if(defined($ptype))
-		{
-			$pcount = 1 unless(defined($pcount));
-			my $fields = [ $type, $count, $trans, $value, $offset, $ptype, $pname, $pcount ];
-			push(@{$structsref->{$structname}}, [ $name, $fields ]);
-			$structfieldsref->{$structname}->{$name} = $fields;
+	structname = m[1]
+	fields = m[2]
+	end = m.end()
+	if(debug): print(f"struct: {structname}", sys.stderr)
+	structs[structname] = []
+	structfields[structname] = {}
+
+	i = 0
+	for field in (re.split('\s*\n\s*', fields)):
+		if(field == ""): continue
+		if None is (m := re.search(
+			r'(\[([^\]]*)\]\s*)?' + # [2]
+			r'(([\w{}]+)(\s*\[([^\[\]]+)\])?\@)?' + # 4[6]@
+			r'([\w{}]+)(\s*\[([^\[\]]*)\])?' + # 7[9]
+			r'(\s+\<([\w{}]+)\>)?' + # <11>
+			r'(\s+((\w+)\@)?(\w+))?' + # 14@15
+			r'(\s=\s*(.*))?', # =17
+			field)
+		):
+			print(f"ERROR '{field}'", sys.stderr);
+			break
+
+		(offset, ptype, pcount, stype, count, trans, pname, name, value) = (m[2], m[4], m[6], m[7], m[9], m[11], m[14], m[15], m[17])
+		if(debug): print('(offset, ptype, pcount, stype, count, trans, pname, name, value) = ' + f"{offset}, {ptype}, {pcount}, {stype}, {count}, {trans}, {pname}, {name}, {value}", sys.stderr)
+		if(count == None): count = 1
+		elif(count == ''): count = None
+		if None is (name): name = stype + str(i)
+		if(None is not (ptype)):
+			if None is (pcount): pcount = 1
+			fields = [ stype, count, trans, value, offset, ptype, pname, pcount ]
+			structs[structname].append([ name, fields ])
+			structfields[structname][name] = fields
 			# when reading xml, we need the ptypes as fields too
-			$structfields->{$structname}->{$pname} = [ $ptype, $pcount ];
-		}
-		else
-		{
-			my $fields = [ $type, $count, $trans, $value, $offset ];
-			push(@{$structsref->{$structname}}, [ $name, $fields ]);
-			$structfieldsref->{$structname}->{$name} = $fields;
-		}
-		$i++;
-	}
-	$$textref = $'; #indentfix->';
-	return $i;
-}
+			structfields[structname][pname] = [ ptype, pcount ]
+		else:
+			fields = [ stype, count, trans, value, offset, None, None, None ]
+			structs[structname].append([ name, fields ])
+			structfields[structname][name] = fields
+		i += 1
 
-sub parse_bfmt_translation
-{
-	my($textref, $translations_ref, $reverse_translations_ref, $file_settings_ref) = @_;
+	return end
 
-	return undef unless($text =~ m%^\s*([\w\d]*)=$([^=]+)^=$%ms );
-	if($1 eq '')
-	{
-		($$file_settings) = parse_translation($2);
-	}
-	else
-	{
-		($translations_ref->{$1}, $reverse_translations_ref->{$1}) = parse_translation($2);
-	}
-	$$textref = $';
-	return 1;
-}
+def parse_bfmt_translation(text, translations, reverse_translations):
+	if(None is (m := re.match('^\s*([\w\d]*)=$([^=]+)^=$', text, re.M | re.S))): return None
+	(translations[m[1]], reverse_translations[m[1]]) = parse_translation(m[2])
 
-while(1)
-{
-	if(parse_bfmt_struct(\$text, \%structs, \%struct_fields))
-	{
-	}
-	elsif(parse_bfmt_translation(\$text, \%translations, \%reverse_translations)) {
-	}
-	else { last; }
-}
-my %seen;
-my %tseen;
-my @tnames;
+	return m.end()
 
-my $stage = 0;
+def N(n): return n if n is not None else ''
 
-my $fmtname = $fmtfile;
-$fmtname =~ s/.*\///g;
+def print_struct_html(name, struct):
+	print('<table border="1">')
+	print(f'<tr><td colspan="4"><a name="{N(name)}">{N(name)}</a></td>')
+	print("<tr><th>name</th><th>offset</th><th>type</th><th>trans-<br>lation</th><th>value</th><th>pname</th><th>ptype</th></tr>")
+	for sfield in (struct):
+		(name, fields) = sfield
+		(stype, count, trans, value, offset, ptype, pname, pcount) = fields
+		if stype in structs: stype = f'<a href="#{N(stype)}">{N(stype)}</a>'
+		if trans in translations: trans = f'<a href="#trans__{N(trans)}">{N(trans)}</a>'
+		if(None is not count and 1 != count and '1' != count): stype = f"{N(stype)}[{N(count)}]"
+		if(None is not pcount and 1 != pcount and '1' != pcount): ptype = f"{N(ptype)}[{N(pcount)}]"
+		print(f"<tr><td>{N(name)}</td><td>{N(offset)}</td><td>{N(stype)}</td><td>{N(trans)}</td><td>{N(value)}</td><td>{N(pname)}</td><td>{N(ptype)}</td></tr>")
 
-print
-'<html>
-<head>
-</head>
-<body>';
-print "<h1>$fmtname</h1>\n";
-while(@tnames or @names)
-{
-	my @next_tnames;
-	my @next_snames;
+	print('</table>')
 
-	while(@tnames)
-	{
-		my $name = shift(@tnames);
-	        next if(defined($tseen{$name}));
-		$tseen{$name} = 1;
-		unless(defined($translations{$name}))
-		{
-			next;
-		}
-		print "<p>\n";
-		print_translation_html($name, $translations{$name});
-		print "</p>\n";
-	}
-	while(@names)
-	{
-		my $name = shift(@names);
-	        next if(defined($seen{$name}));
-		$seen{$name} = 1;
+def print_translation_html(name, translation):
+	print('<table border="1">')
+	print(f'<tr><td colspan="2">Translation: <a name="trans__{N(name)}">{N(name)}</a></td>')
+	print("<tr><th>from</th><th>to</th><th></tr>")
+	for tname in (sorted(list(translation))):
+		tvalue = translation[tname]
 	
-		unless(defined($structs{$name}))
-		{
-			next;
-		}
+		print(f"<tr><td>{tname}</td><td>{N(tvalue)}</td></tr>")
 
-		print "<p>\n";
-		print_struct_html($name, $structs{$name});
-		print "</p>\n";
-		push(@next_snames, get_referenced_structs($structs{$name}));
-		push(@next_tnames, get_referenced_translations($structs{$name}));
-	}
-	@tnames = @next_tnames;
-	@names = @next_snames;
-	if(@next_snames == 0 and @next_tnames == 0 and $stage == 0)
-	{
-		$stage = 1;
-		@names = sort(keys (%structs));
-	}
-	elsif(@next_snames == 0 and @next_tnames == 0 and $stage == 1)
-	{
-		$stage = 2;
-		@tnames = sort(keys (%translations));
-	}
+	print('</table>')
+
+def get_referenced_structs(struct):
+	reftypes = []
+	seen = {}
+	for sfield in (struct):
+		(name, fields) = sfield
+		(stype, count, trans, value, offset, ptype, pname, pcount) = fields
+		if(stype not in seen): reftypes.append(stype)
+		seen[stype] = 1
+		if(None is not (ptype) and ptype not in seen):
+			reftypes.append(ptype)
+			seen[ptype] = 1
+
+	return (reftypes)
+
+def get_referenced_translations(struct):
+	reftrans = []
+	seen = {}
+	for sfield in (struct):
+		(name, fields) = sfield
+		(stype, count, trans, value, offset, ptype, pname, pcount) = fields
+		if(trans not in seen): reftrans.append(trans)
+		seen[trans] = 1
+
+	return (reftrans)
+
+
+structs = {}
+struct_fields = {}
+translations = {}
+reverse_translations = {}
+
+while(1):
+	if(matchend := parse_bfmt_struct(text, structs, struct_fields)):
+		text = text[matchend:]
+	elif(matchend := parse_bfmt_translation(text, translations, reverse_translations)):
+		text = text[matchend:]
+	else:
+		if(None != re.search('\S', text, re.S)):
+			print(f"no match: {text}", file=sys.stderr)
+		break
+
+if('' in translations):
+	file_settings = translations['']
+	translations.pop('')
+	reverse_translations.pop('')
+else:
+	file_settings = {}
+
+seen = {}
+tseen = {}
+tnames = []
+stage = 0
+
+fmtname = fmtfile
+fmtname = re.sub('.*\/', '', fmtname)
+
+print('<html><head></head><body>')
+print(f"<h1>{N(fmtname)}</h1>")
+while(tnames or names):
+	next_tnames = []
+	next_snames = []
+	while(len(tnames)):
+		name = tnames[0]
+		tnames = tnames[1:]
+		if name in tseen: continue
+		tseen[name] = 1
+		if name not in translations:
+			continue
+
+		print("<p>")
+		print_translation_html(name, translations[name])
+		print("</p>")
+
+	while(len(names)):
+		name = names[0]
+		names = names[1:]
+		if name in seen: continue
+		seen[name] = 1
+
+		if name not in structs: continue
 	
-}
-print
-'</body>
-</html>';
+		print("<p>")
+		print_struct_html(name, structs[name])
+		print("</p>")
+		next_snames.extend(get_referenced_structs(structs[name]))
+		next_tnames.extend(get_referenced_translations(structs[name]))
 
-sub print_struct_html
-{
-	my($name, $struct) = @_;
-	print '<table border="1">'."\n";
-	print "<tr><td colspan=\"4\"><a name=\"$name\">$name</a></td>"."\n";
-	print "<tr><th>name</th><th>offset</th><th>type</th><th>trans-<br>lation</th><th>value</th><th>pname</th><th>ptype</th></tr>\n";
-	foreach my $sfield (@{$struct})
-	{
-		my($name, $fields) = @{$sfield};
-		my($type, $count, $trans, $value, $offset, $ptype, $pname, $pcount) = @{$fields};
-		$type = "<a href=\"#$type\">$type</a>" if(defined($structs{$type}));
-		$trans = "<a href=\"#trans__$trans\">$trans</a>" if(defined($translations{$trans}));
-		$type = "$type\[$count\]" if(defined($count) and $count != 1);
-		$ptype = "$ptype\[$pcount\]" if(defined($pcount) and $pcount != 1);
-		print "<tr><td>$name</td><td>$offset</td><td>$type</td><td>$trans</td><td>$value</td><td>$pname</td><td>$ptype</td></tr>\n";
-	}
-	print '</table>'."\n";
-}
+	tnames = next_tnames
+	names = next_snames
+	if(len(next_snames) == 0 and len(next_tnames) == 0 and stage == 0):
+		stage = 1
+		names = sorted(list(structs))
 
-sub print_translation_html
-{
-	my($name, $translation) = @_;
-	print '<table border="1">'."\n";
-	print "<tr><td colspan=\"2\">Translation: <a name=\"trans__$name\">$name</a></td>"."\n";
-	print "<tr><th>from</th><th>to</th><th></tr>\n";
-	foreach my $tname (sort(keys(%{$translation})))
-	{
-		my $tvalue = $translation->{$tname};
-	
-		print "<tr><td>$tname</td><td>$tvalue</td></tr>\n";
-	}
-	print '</table>'."\n";
-}
+	elif(len(next_snames) == 0 and len(next_tnames) == 0 and stage == 1):
+		stage = 2
+		tnames = sorted(list(translations))
 
-
-sub get_referenced_structs
-{
-	my($struct) = @_;
-	my(@reftypes);
-	my(%seen);
-	foreach my $sfield (@{$struct})
-	{
-		my($name, $fields) = @{$sfield};
-		my($type, $count, $trans, $value, $offset, $ptype) = @{$fields};
-		push(@reftypes, $type) if(!defined($seen{$type}));
-		$seen{$type} = 1;
-		if(defined($ptype))
-		{
-			push(@reftypes, $ptype) if(!defined($seen{$ptype}));
-			$seen{$ptype} = 1;
-		}
-	}
-	return (@reftypes);
-}
-
-sub get_referenced_translations
-{
-	my($struct) = @_;
-	my(@reftrans);
-	my(%seen);
-	foreach my $sfield (@{$struct})
-	{
-		my($name, $fields) = @{$sfield};
-		my($type, $count, $trans) = @{$fields};
-		push(@reftrans, $trans) if(!defined($seen{$trans}));
-		$seen{$trans} = 1;
-	}
-	return (@reftrans);
-}
+print('</body></html>')
